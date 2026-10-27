@@ -73,6 +73,19 @@ point and validated offline.
 Volatile selector/register samples remain available for separate review.
 Neither analyzer generates an admission profile or authorizes a transaction.
 
+The offline comparator now reports physical_gop_matches, console_variables_match,
+console_role_aliases_match and gpu_ownership_matches separately. It identifies
+pathless GPU driver agents only when their captured non-relocated code bytes,
+file path, binding status and Stop offset are verified and unique. A pathless
+virtual console is a rooted role observation, not a verified implementation.
+Boundary and global ownership keep their own unknown status with per-endpoint
+reasons. A matching GPU subgraph never authorizes driver release or unlock.
+
+For captures made with different probe builds, use --left-manifest and
+--right-manifest to select each capture's saved manifest. --output writes a
+new private JSON report, refusing overwrite. Snapshot-local handle IDs appear
+only in diagnostics; they are never used as cross-capture identity anchors.
+
 Keep raw captures private: they contain proprietary ROM, loaded code and
 machine-specific details. No deployment or boot-registration script is
 provided. The compiled image is unsigned. The operator disabled Secure Boot

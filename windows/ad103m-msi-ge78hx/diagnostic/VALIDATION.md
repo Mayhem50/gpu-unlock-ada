@@ -10,8 +10,12 @@ Results:
   against mock protocols and in-memory PCI/PROM/register data.
 - C platform mocks: 192 assertions passed for loaded PE parsing and bounded
   protocol graph capture.
-- Python: 25 tests passed, covering PE rejection, capture mutation rejection,
+- Python: 39 tests passed, covering PE rejection, capture mutation rejection,
   driver digest validation, semantic graph comparison and unresolved graphs.
+  The comparator-only update adds pathless driver/console anchors, distinct
+  GPU/boundary/global diagnostics, handle-renumbering and ownership-mutation
+  tests, independent-manifest CLI checks and the private CAP0003/CAP0004
+  integration. All 39 were rerun without rebuilding or changing the EFI.
 - PowerShell: pure identity tests passed for the expected PCI/NVML strings,
   duplicate GPUs, wrong device/subsystem/revision, driver and VBIOS.
 - Collector syntax parsed successfully; the collector itself was not run.
