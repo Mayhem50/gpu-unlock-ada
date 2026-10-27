@@ -118,11 +118,11 @@ static void method_regressions(void) {
         }
     }
     setup(OK);o=ops();o.lifecycle=unavailable_lifecycle;execute_regression(&o);
-    CHECK(S.state==MSI_REFUSED&&!M.stages&&!M.transactions);
+    CHECK(S.state==MSI_STOPPED&&S.terminal_required&&S.dma_retained&&!M.stages&&!M.transactions);
     setup(OK);o=ops();o.lifecycle=lost_lifecycle_after_start;execute_regression(&o);
     no_reset_or_cleanup();CHECK(S.containment_verified&&!(M.config[1]&4));
     setup(OK);M.life.live_dma=1;o=ops();execute_regression(&o);
-    CHECK(S.state==MSI_REFUSED&&!M.stages&&!M.transactions&&!M.freed);
+    CHECK(S.state==MSI_STOPPED&&S.terminal_required&&S.dma_retained&&!M.stages&&!M.transactions&&!M.freed);
     setup(OK);o=ops();o.prepare_claim_close=hidden_cleanup_preparation;execute_regression(&o);
     CHECK(S.terminal_required&&S.dma_retained&&!M.freed&&!M.windows&&M.life.frees==1);
     setup(OK);o=ops();RecursiveResetRejections=0;o.read_mmio=recursive_reset_read;execute_regression(&o);

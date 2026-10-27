@@ -1,8 +1,11 @@
 # Review of FBPA/readout and lifecycle ownership changes
 
-Reviewed revision: `729b38f`, 2026-10-27. Source review, local reference comparison
+Original reviewed revision: `729b38f`, 2026-10-27. Findings below describe that
+revision. F3/F4 are now corrected in the host model and converted to normal
+regressions; see the remediation section. Source review, local reference comparison
 and CPU mocks only. No GPU query, EFI execution, unlock, reboot, USB deployment
-or boot-policy modification. Core behavior is unchanged by this review.
+or boot-policy modification. The original review changed no core behavior;
+subsequent remediation changes only host code and CPU mocks/tests.
 
 ## Confirmed alignment
 
@@ -73,7 +76,7 @@ Missing regressions: each counter/live resource/violation dirtied at log close,
 guard acquisition and action entry; lifecycle-read failure; stock retries;
 no GPU config/MMIO access or unauthorized cleanup in the failure path.
 
-## Evidence and remaining gates
+## Original review evidence (historical)
 
 The normal suite still passes **223 scenarios / 164,445 assertions**. The
 existing diagnostic CPU executables pass **7,925 application / 192 platform
@@ -81,22 +84,59 @@ checks**; **39 Python tests**, pure identity tests and PE/source checks pass.
 The unchanged diagnostic EFI SHA256 is
 `18efed6c4a60ce0ae682fb9c9d165f425c280a2159e32f57124f8cf3c41703f9`.
 
-`port/tests/review_method_followup.c` separately reproduces F3/F4. Its zero exit
-status means the gaps were reproduced, not a safety qualification. Convert it
-to rejection regressions when correcting them. The [checklist](windows-msi-ge78hx-launch-checklist.md)
-reopens T1 for raw single-use enforcement and adds stock-path lifecycle closure.
-Native firmware phases, DMA ledger, timing, exclusion and terminal behavior
-remain unqualified. No new hardware trial is justified by these CPU passes.
+At review commit `6e878b2`, `port/tests/review_method_followup.c` separately
+reproduced F3/F4. That file is removed and replaced by integrated rejection
+regressions in `port/tests/lifecycle_regressions.h`.
 
-CPU-only reproduction from the repository root:
+## Host remediation and current validation
+
+**F3:** a backend-owned MsiResetGate is consumed before callbacks or the first
+raw reset write. Its spent/violation flags are independent of lifecycle counters
+and phase labels. Any repeat or unauthorized request is rejected before effects
+and marks a sticky violation. All valid byte/word/dword encodings covering the
+FLR bit use the gate. A failed first write, whether or not it had a modeled
+effect, still spends the attempt and still receives the required quiet period.
+No code path implicitly rearms the gate; only a fresh host test fixture creates
+a fresh session. This is not an instruction for automatic hardware retry.
+
+Regressions cover readiness, restoration, quiet time, recursive raw writes,
+failed first writes with/without effects, aliases, and repaired phase/counters.
+Each test observes at most one raw effect; rejected repeats do not even perform
+a virtual config access. The normal orchestrator still spends its own helper
+attempt, and the journal detects the recorded violation before cleanup/handoff.
+
+**F4:** stock lifecycle is checked after log close and again after guard
+acquisition/validation, even if acquisition or close failed. The stock compound
+action independently checks the current scoped bookkeeping at its action point.
+Dirty or unreadable state refuses transfer, sets dma_retained conservatively,
+retains any acquired/uncertain guard and requires terminal handling. Entry-time
+bookkeeping uncertainty is now terminal too. A stock cleanup failure cannot
+be presented as a harmless ordinary-return refusal. No GPU query, reset,
+detach, unmap/free or automatic repair is added to this path.
+
+Regressions inject every counter, live buffer, sticky ownership flag, gate
+history and unreadable ledger at log close, guard acquisition/validation and
+commit entry. Failed partial guard acquisition and log close are covered.
+Stock retries and commit replay after journal repair remain refused. A clean
+stock flow still transfers without virtual PCI/MMIO accesses or cleanup.
+
+Current result: **304 workflow scenarios / 190,413 assertions** pass, together
+with the negative compilation gates, diagnostic CPU suites (7,925 application
+and 192 platform checks), 39 Python tests, pure identity tests and PE/source
+verification. The diagnostic EFI hash above is unchanged. Assertions include
+repeated invariants, not independent safety requirements.
+
+T1 and V0 are complete only as host contracts/regressions. Native firmware
+phases, real DMA ledger, timing, exclusion and terminal behavior remain
+unqualified under the [checklist](windows-msi-ge78hx-launch-checklist.md).
+The backend must enforce the reset gate and stock predicate before effects;
+these trusted contracts are not isolation against malicious C code. There is
+no adapter, actual GPU operation or new hardware qualification here.
+
+Run the integrated CPU suite from the repository root:
 
 ```powershell
 pwsh -NoProfile -File windows/ad103m-msi-ge78hx/port/Build-Offline.ps1
 if ($LASTEXITCODE -ne 0) { throw 'Normal suite failed' }
-$reviewMethod = Get-Content windows/ad103m-msi-ge78hx/port/build/compile.cmd -Raw
-$reviewMethod = $reviewMethod.Replace('tests\host_tests.c','tests\review_method_followup.c').Replace('msi-offline-tests.exe','review-method-followup.exe').Replace('build\validation.log','build\review-method-followup.log')
-Set-Content windows/ad103m-msi-ge78hx/port/build/compile-method-review.cmd -Value $reviewMethod -Encoding ascii
-& $env:ComSpec /d /c windows\ad103m-msi-ge78hx\port\build\compile-method-review.cmd
-if ($LASTEXITCODE -ne 0) { throw 'Review probe failed' }
-Get-Content windows/ad103m-msi-ge78hx/port/build/review-method-followup.log -Tail 3
+python -m unittest discover -s windows/ad103m-msi-ge78hx/diagnostic/tests -p 'test_*.py'
 ```

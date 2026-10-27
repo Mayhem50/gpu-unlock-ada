@@ -15,7 +15,7 @@ enum Fault {OK,STAGE_FAIL,OBSERVE_DRIFT,EXTRA_OWNER,STOP1_FAIL,STOP2_FAIL,STOP3_
  PENDING_STUCK,FLR_WRITE_FAIL,RESET_WRONG_ID,RESET_TIMEOUT,RESTORE_FAIL,POST_SELECTOR_FAIL,
  POST_HALT_FAIL,DMA_FREE_FAIL,CLOSE_CLAIM_FAIL,CLOSE_LOG_FAIL,FINAL_GRAPH_FAIL,FINAL_MMIO_FAIL,
  RETURNED_WINDOWS,DECODE_LOST,DECODE_RESTORE_FAIL,EXTRA_CONFIG_DRIFT,PRE_SEC2_INACCESSIBLE,
- FINAL_ID_DRIFT,FINAL_BAR_DRIFT,FINAL_MSI_DRIFT,CONTAINMENT_FAIL};
+ FINAL_ID_DRIFT,FINAL_BAR_DRIFT,FINAL_MSI_DRIFT,CONTAINMENT_FAIL,FLR_FAIL_NO_EFFECT};
 typedef struct {
     MsiObservation observation;MsiGraph graph;uint32_t config[64];enum Fault fault;
     unsigned stops,transactions,stages,snapshots,observations,claims,freed,closes,windows;
@@ -30,6 +30,10 @@ typedef struct {
     bool dma_commit_spent,transfer_commit_spent;
     bool dma_prepared,claim_prepared;
     MsiLifecycle life;
+    MsiResetGate reset_gate;
+    unsigned raw_reset_rejections;
+    unsigned raw_reset_effects;
+    bool lifecycle_unreadable;
     uint32_t fbpa;
 } Mock;
 static Mock M;
@@ -39,6 +43,7 @@ static jmp_buf Transfer;
 static const MsiQualification SyntheticApproval={true,true,true,true};
 static bool ProbeReentry;
 static unsigned Reentries;
+static void (*RawResetHook)(void);
 static MsiOps ops(void);
 static void reentry_probe(void) {
     if(!ProbeReentry)return;
@@ -130,10 +135,24 @@ static bool read_config(void *v,unsigned offset,unsigned width,uint32_t *value) 
     return true;
 }
 static bool write_config(void *v,unsigned offset,unsigned width,uint32_t value) {
-    Mock *m=v;touch(m);m->config_writes++;CHECK(offset<256&&(width==1||width==2||width==4)&&((offset&3)+width<=4));
-    if(offset==MSI_PCIE+8&&width==2&&(value&0x8000)) {
-        if(S.state!=MSI_RESET){m->life.owner_violation=true;return false;}
+    Mock *m=v;CHECK(offset<256&&(width==1||width==2||width==4)&&((offset&3)+width<=4));
+    const unsigned flr_byte=MSI_PCIE+9;
+    bool flr=offset<=flr_byte&&flr_byte-offset<width&&
+        (value&(0x80u<<(8*(flr_byte-offset))));
+    if(flr) {
+        /* Independent one-use gate is consumed before touch/callbacks/effects.
+         * Byte, word, unaligned word and dword encodings all use this gate. */
+        if(!msi_reset_gate_take(&m->reset_gate,S.state==MSI_RESET&&S.flrs==1)) {
+            m->life.owner_violation=true;m->raw_reset_rejections++;return false;
+        }
         m->life.resets++;
+    }
+    touch(m);m->config_writes++;
+    if(flr) {
+        if(m->fault==FLR_FAIL_NO_EFFECT)return false; /* Attempt spent despite no modeled effect. */
+        /* A recursive write during this hook must already find a spent gate. */
+        if(RawResetHook){void (*hook)(void)=RawResetHook;RawResetHook=NULL;hook();}
+        m->raw_reset_effects++;
         CHECK(!(m->config[1]&4));m->flr_written=true;m->flr_at=m->clock;
         m->config[1]&=~7u;
         memset(m->config+4,0,6*sizeof(uint32_t));
@@ -179,6 +198,7 @@ static bool atomic_safe(Mock *m,const MsiGuard *g,bool exclusive) {
     return guard_current(m,g)&&g->purpose==MSI_GUARD_FINAL&&
         !memcmp(m->config,m->guard_reference,sizeof(m->config))&&
         !(m->config[1]&4)&&m->flr_written&&m->clock-m->flr_at>=100000&&
+        m->reset_gate.spent&&!m->reset_gate.violation&&
         !m->life.owner_violation&&m->life.resets==1&&m->life.restores==1&&
         !m->life.unmaps&&!m->life.frees&&!m->life.claim_closes&&m->life.live_dma==2&&
         (m->fbpa&0xffff0000u)!=0xbadf0000u&&
@@ -208,7 +228,17 @@ static bool prepare_dma_release(void *v,const MsiGuard *g) {
 }
 static bool prepare_claim_close(void *v){reentry_probe();Mock *m=v;CHECK(m->guard_active&&m->dma_prepared&&!m->freed&&m->graph.exclusive);m->claim_prepared=true;return m->fault!=CLOSE_CLAIM_FAIL;}
 static bool close_log(void *v){reentry_probe();Mock *m=v;CHECK(!m->log_closed);m->closes++;m->log_closed=true;return m->fault!=CLOSE_LOG_FAIL;}
-static bool lifecycle(void *v,MsiLifecycle *out){reentry_probe();*out=((Mock *)v)->life;return true;}
+static bool lifecycle(void *v,MsiLifecycle *out) {
+    reentry_probe();Mock *m=v;if(m->lifecycle_unreadable)return false;
+    *out=m->life;
+    out->owner_violation|=m->reset_gate.violation||(m->reset_gate.spent&&m->life.resets!=1);
+    return true;
+}
+static bool stock_lifecycle_clean(const Mock *m) {
+    return !m->lifecycle_unreadable&&!m->reset_gate.spent&&!m->reset_gate.violation&&
+        !m->life.owner_violation&&!m->life.resets&&!m->life.restores&&
+        !m->life.unmaps&&!m->life.frees&&!m->life.claim_closes&&!m->life.live_dma;
+}
 static void commit_windows(void *v,const MsiGuard *g,bool *dma_retained) {
     Mock *m=v;
     if(S.state!=MSI_WINDOWS_INVOKED){m->life.owner_violation=true;return;}
@@ -218,7 +248,11 @@ static void commit_windows(void *v,const MsiGuard *g,bool *dma_retained) {
     if(!guard_current(m,g)||!m->log_closed)return;
     if(g->purpose==MSI_GUARD_FINAL) {
         if(!atomic_safe(m,g,true)||m->freed||m->stops!=3||!m->dma_prepared||!m->claim_prepared||!dma_retained||!*dma_retained)return;
-    } else if(g->purpose!=MSI_GUARD_STOCK||m->stops||m->transactions)return;
+    } else {
+        if(g->purpose!=MSI_GUARD_STOCK||m->stops||m->transactions)return;
+        if(!stock_lifecycle_clean(m)){if(dma_retained)*dma_retained=true;return;}
+        if(!dma_retained||*dma_retained)return;
+    }
     /* Model one indivisible guarded commit. No callback or hook from here
      * through resource release/claim close and transfer. */
     if(g->purpose==MSI_GUARD_FINAL){
@@ -326,10 +360,11 @@ static void ownership_tests(void) {
 #include "regression_tests.h"
 #include "followup_regressions.h"
 #include "method_regressions.h"
+#include "lifecycle_regressions.h"
 int main(void) {
     FILE *f=fopen("build/prom.bin","rb");CHECK(f!=NULL);Prom=malloc(1048576);CHECK(Prom);
     CHECK(fread(Prom,1,1048576,f)==1048576&&fgetc(f)==EOF);fclose(f);
-    profile_tests();ownership_tests();workflow_tests();regression_tests();followup_regressions();method_regressions();free(Prom);
+    profile_tests();ownership_tests();workflow_tests();regression_tests();followup_regressions();method_regressions();lifecycle_regressions();free(Prom);
     printf("PASS: %u host assertions, %u workflow scenarios.\n",Checks,Scenarios);
     puts("ROM/FWSEC profile, staged release, FLR quiet time/restore, DMA retention and Windows invocation: mocked only.");
     puts("No GPU access, firmware execution, payload or native UEFI backend; real candidate remains refused.");

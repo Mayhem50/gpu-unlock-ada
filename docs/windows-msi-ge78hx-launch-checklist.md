@@ -45,7 +45,7 @@ A complete checklist is not a completed checklist or a guarantee of recovery.
   release; final compound commit revalidates state and lease at its action.
 - [x] Partial console mutation tracked before callback; terminal result on failure,
   without GPU cleanup for console-only errors or unverified automatic rollback.
-- [x] 223 CPU scenarios / 164,445 assertions; diagnostic CPU suites
+- [x] 304 CPU scenarios / 190,413 assertions; diagnostic CPU suites
   (7,925 application / 192 platform), 39 Python tests, identity and PE/source
   checks recorded passing. Counts include repeated checks, not independent requirements.
 - [x] Negative host/UEFI compilation guards and failed-build manifest invalidation.
@@ -85,13 +85,14 @@ this MSI model validation. Their scenario counts are not MSI coverage.
 
 ## 3. Repository transaction parity — before any adapter
 
-- [ ] **T1 (host, reopened by F3):** session owns lifecycle scheduling. A typed pre-reset-only
+- [x] **T1 (host, F3 corrected):** session owns lifecycle scheduling. A typed pre-reset-only
   step must retain DMA and cannot own reset/unwind; the private helper owns one
   FLR/restore and guarded final commit alone performs cleanup. Unknown/full-core
   boundaries and recursive/repeated private-helper entry are refused. Raw FLR
-  writes during the authorized reset phase still need a single-use gate before
-  effects: the journal detects a second write too late. See the
-  [latest review](windows-msi-ge78hx-pre-flr-review.md). Native enforcement remains T6/T7.
+  writes now use a separate single-use backend gate before callbacks/effects,
+  including alias encodings and failed first writes. Repaired counters/phases
+  cannot rearm it. See [remediation](windows-msi-ge78hx-pre-flr-review.md).
+  Native enforcement remains T6/T7.
 - [ ] **T2:** model/test GFW, FWSEC/FRTS/signature-version/fuse selection,
   payload publication, SEC2 completion/HALT, stock-signature restoration and
   selector phases. Require both signature phases; no early metadata change or
@@ -126,10 +127,11 @@ this MSI model validation. Their scenario counts are not MSI coverage.
 
 - [ ] **V1:** explicit stock/no-unlock mode and stock postconditions.
   Current synthetic unlocked-selector success flow is not this test.
-- [ ] **V0 (F4):** revalidate clean scoped lifecycle after stock log close and
-  at stock commit itself. Current skip path can hand off with newly dirty
-  bookkeeping. Dirty/unavailable state must retain resources/guard, refuse
-  handoff and trigger no GPU access or automatic cleanup.
+- [x] **V0 (host, F4 corrected):** clean scoped lifecycle checked after stock log
+  close and guard acquisition/validation, and independently at stock commit.
+  Dirty/unavailable state retains uncertain resources/guard and requires terminal
+  handling, with no GPU access or automatic cleanup. Stock recovery on hardware
+  remains V1–V4, not proved by a mock transfer.
 - [ ] **V2:** independently validate release-only, reset and stock Windows
   handoff in staged tests. Reset is a GPU mutation; none is authorized here.
 - [ ] **V3:** before future hardware trials: idle workloads, saved work, AC,

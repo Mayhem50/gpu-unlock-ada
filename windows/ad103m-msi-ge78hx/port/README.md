@@ -120,7 +120,7 @@ console-only failure. No automatic console rollback is claimed.
 
 ## Validation result — 2026-10-27
 
-The offline C suite passed **164,445 assertions across 223 workflow scenarios**.
+The offline C suite passed **190,413 assertions across 304 workflow scenarios**.
 Coverage includes both captures, profile/ROM mutations, missing/extra/duplicate
 owners, each partially failed detach, boundary/console/logging drift, exclusive
 claim failure, narrow decode restoration, invalid transaction proofs, inaccessible
@@ -167,10 +167,14 @@ A future native implementation must enforce the same gates before effects and
 maintain reliable bookkeeping; detecting a forbidden operation afterward cannot
 undo it. No such backend or real DMA-address ledger is supplied here.
 
-The [review of this change](../../../docs/windows-msi-ge78hx-pre-flr-review.md)
-reproduces two remaining gaps: raw FLR single-use enforcement within the reset
-phase, and final lifecycle validation on the stock/skip path. Normal regression
-passes do not cover these cases; the relevant checklist gates are open again.
+The [review and remediation](../../../docs/windows-msi-ge78hx-pre-flr-review.md)
+records F3/F4, now covered by `tests/lifecycle_regressions.h`. A backend-owned
+MsiResetGate is consumed before callbacks or any raw FLR effect, regardless of
+encoding. Failed writes spend it; phase/counter repair cannot rearm it. Stock
+handoff checks clean scoped lifecycle after log close and guard acquisition,
+then independently inside its final action. Dirty or unreadable state is terminal
+and retains uncertain resources/guard; stock failure adds no PCI/MMIO access or
+automatic cleanup. Native enforcement and actual recovery remain unqualified.
 
 The diagnostic's unchanged CPU suites also passed (7,925 application checks and
 192 platform checks), along with 39 Python tests, pure PowerShell identity tests

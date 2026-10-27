@@ -54,6 +54,10 @@ typedef struct {
     unsigned live_dma;
     bool owner_violation;
 } MsiLifecycle;
+/* Backend-owned, session-lifetime gate, independent of mutable statistics.
+ * Consume before any callback/write. Never rearm on error or counter repair. */
+typedef struct {bool spent,violation;} MsiResetGate;
+bool msi_reset_gate_take(MsiResetGate *,bool owner_authorized);
 /* Only this phase boundary is supported. A complete upstream unlock function
  * also owns reset/unwind and is intentionally NOT an admissible callback. */
 enum { MSI_PRE_RESET_RETAINED_V1=0x4d530101u,MSI_FULL_TRANSACTION=0x4d530102u };
@@ -81,6 +85,8 @@ typedef struct {
     MsiPreResetStep pre_reset; /* no FLR, PCI restore, unmap/free or claim close */
     bool (*lifecycle)(void *,MsiLifecycle *); /* RAM bookkeeping only; fail closed */
     bool (*read_config)(void *,unsigned offset,unsigned width,uint32_t *);
+    /* Every encoding covering the FLR bit must use a backend MsiResetGate
+     * before callbacks/effects, not merely test the current phase/counters. */
     bool (*write_config)(void *,unsigned offset,unsigned width,uint32_t);
     void (*stall)(void *,unsigned microseconds);
     bool (*read_mmio)(void *,uint32_t offset,uint32_t *);
@@ -101,7 +107,10 @@ typedef struct {
      * transfer. No ordinary external callback after actual resource release.
      * Update dma_retained only when ALL buffers/mappings are safely released.
      * Partial failure retains the guard and remaining resources. Any return
-     * is failure. This abstract action has ONLY a CPU mock implementation. */
+     * is failure. A STOCK commit must also revalidate clean scoped lifecycle at the
+     * action itself; unreadable/dirty bookkeeping sets dma_retained true and
+     * refuses transfer without GPU queries, reset or cleanup.
+     * This abstract action has ONLY a CPU mock implementation. */
     void (*commit_windows)(void *,const MsiGuard *,bool *dma_retained);
 } MsiOps;
 enum MsiState {MSI_NEW,MSI_ENTERED,MSI_REFUSED,MSI_STAGED,MSI_RELEASED,MSI_TRANSACTION,MSI_RESET_READY,MSI_RESET_VERIFYING,
@@ -112,6 +121,7 @@ typedef struct {
     /* Host result only: never permission for an EFI entry point to return. */
     bool terminal_required,cleanup_failed;
     bool console_may_be_changed,guard_attempted,guard_retained;
+    bool stock_cleanup_started;
     unsigned stops,transactions,flrs,windows_calls;
     unsigned failed_stage;
     MsiPreFlrEvidence pre_flr;

@@ -2,6 +2,11 @@
 #include "reset_internal.h"
 #include <string.h>
 
+bool msi_reset_gate_take(MsiResetGate *gate,bool authorized) {
+    if(!gate)return false;
+    if(gate->spent||gate->violation||!authorized){gate->violation=true;return false;}
+    gate->spent=true;return true;
+}
 static bool config_matches(const MsiOps *o,const uint32_t reference[64],bool decode_off) {
     for(unsigned i=0;i<64;i++) {
         uint32_t value,expected=reference[i];
