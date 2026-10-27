@@ -15,8 +15,9 @@ regressions and corrected in the host model. The exclusion/commit contract below
 still has no native implementation and does not qualify hardware testing.
 The [method alignment matrix](../../../docs/windows-msi-ge78hx-method-alignment.md)
 and [gate checklist](../../../docs/windows-msi-ge78hx-launch-checklist.md) record
-remaining parity gaps, especially single reset/unwind ownership, real firmware
-phases, FBPA accessibility sampling and pre-FLR effective-rate readout.
+completed host checks and remaining native parity gates. The host now verifies
+FBPA accessibility and effective readout before FLR, with one reset/cleanup
+scheduler. Real firmware phases and native cleanup/exclusion remain unimplemented.
 
 ## Reproduce the offline validation
 
@@ -46,6 +47,11 @@ without `MSI_OFFLINE_HOST` or with `GU_UEFI_PORT` enabled.
   PCI, BAR and register profile. Accept the two observed SS0 values only.
   Validate the exact bounded PM/MSI/PCIe/vendor capability chain and header layout.
   Firmware signatures are located and hashed, not cryptographically verified.
+- `src/readbacks.c`: independent PCI/chip identity around all four PLM samples;
+  WPR_CFG/WPR/FEAT values required, FBPA accessible without forcing its value.
+  Record raw values and attempted/transport/valid masks even after a PLM fails.
+  Reject inaccessible, failed or non-full effective readout before FLR. Repeat
+  the checks after pending polling immediately before authorizing the FLR write.
 - `src/ownership.c`: match the five internal GPU/console ownership edges and
   verify each proposed detach stage. Preserve boundary, console and logging
   fingerprints. Stable fingerprints do not resolve the identities of external
@@ -114,7 +120,7 @@ console-only failure. No automatic console rollback is claimed.
 
 ## Validation result — 2026-10-27
 
-The offline C suite passed **109,139 assertions across 157 workflow scenarios**.
+The offline C suite passed **164,445 assertions across 223 workflow scenarios**.
 Coverage includes both captures, profile/ROM mutations, missing/extra/duplicate
 owners, each partially failed detach, boundary/console/logging drift, exclusive
 claim failure, narrow decode restoration, invalid transaction proofs, inaccessible
@@ -132,6 +138,34 @@ register, engine, epoch and ownership changes during cleanup and commit;
 unavailable/partial/malformed leases; replay refusal; partial or falsely successful
 console silence. Rejected final operations retain all buffers and do not invoke
 Windows. No ordinary callback runs after actual release in the successful model.
+`tests/method_regressions.h` covers FBPA semantics, every effective-rate bit,
+identity/transport faults, late pre-FLR drift and reset/cleanup ownership.
+An additional negative compile test rejects implicit binding of the complete
+upstream unlock entry to the pre-reset callback signature.
+
+### One lifecycle scheduler
+
+The old generic transaction slot is replaced by a typed pre-reset step with
+boundary MSI_PRE_RESET_RETAINED_V1. Unknown/full-transaction boundaries refuse
+before staging or mutation. This callback ends with firmware/selector work
+complete and DMA retained; it may not FLR, restore PCI state, unmap/free DMA or
+close the claim. The full upstream unlock function includes those phases and
+must not be wrapped or cast into this slot.
+
+Only session orchestration grants MSI_RESET_READY to the private reset helper.
+The helper consumes that state before its first callback, preventing recursive
+entry, and spends the sole FLR attempt before writing it. Only the guarded final
+commit may perform actual unmap/free/claim close. Preparations remain effect-free.
+A RAM lifecycle journal is checked at entry, after staging/claim/pre-reset,
+before/after reset and before commit: no early reset/restore/cleanup, one owned
+reset/restore, and the same number of live DMA buffers reported by the proof.
+Bookkeeping failure or ownership violation retains resources and stops progress.
+
+These are trusted backend contracts, not a sandbox against malicious C code.
+The mock rejects out-of-phase raw FLR/commit attempts and records violations.
+A future native implementation must enforce the same gates before effects and
+maintain reliable bookkeeping; detecting a forbidden operation afterward cannot
+undo it. No such backend or real DMA-address ledger is supplied here.
 
 The diagnostic's unchanged CPU suites also passed (7,925 application checks and
 192 platform checks), along with 39 Python tests, pure PowerShell identity tests

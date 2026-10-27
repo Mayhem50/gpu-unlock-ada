@@ -58,13 +58,13 @@ static void reference_regressions(void) {
         (MSI_PCIE+0x28)/4,(MSI_PM+4)/4,MSI_MSI/4};
     for(unsigned i=0;i<sizeof(indices)/sizeof(indices[0]);i++) {
         setup(OK);DriftIndex=indices[i];DriftMask=DriftIndex==(MSI_PCIE+8)/4?0x20:1;
-        MsiOps o=ops();o.transaction=drift_transaction;execute_regression(&o);
+        MsiOps o=ops();o.pre_reset.run=drift_transaction;execute_regression(&o);
         CHECK(S.state==MSI_STOPPED&&S.terminal_required&&S.dma_retained&&S.containment_verified);
         CHECK(!M.windows&&!S.flrs&&!M.restored_bars&&!M.freed&&!M.mmio_reads);
     }
     /* The original R1 also remains rejected if the caller's reference mutates. */
     setup(OK);DriftIndex=(MSI_PCIE+8)/4;DriftMask=0x20;MutateCallerReference=true;
-    MsiOps o=ops();o.transaction=drift_transaction;execute_regression(&o);MutateCallerReference=false;
+    MsiOps o=ops();o.pre_reset.run=drift_transaction;execute_regression(&o);MutateCallerReference=false;
     CHECK(!M.windows&&!S.flrs&&S.dma_retained&&S.terminal_required);
     /* A successful write return cannot hide a bad BAR/control restore. */
     const unsigned restores[]={4,5,6,7,8,9,12,(MSI_PCIE+8)/4,(MSI_PCIE+0x28)/4};

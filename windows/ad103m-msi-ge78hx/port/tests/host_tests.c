@@ -29,6 +29,8 @@ typedef struct {
     uint32_t safety_regs[7];
     bool dma_commit_spent,transfer_commit_spent;
     bool dma_prepared,claim_prepared;
+    MsiLifecycle life;
+    uint32_t fbpa;
 } Mock;
 static Mock M;
 static MsiSession S;
@@ -40,7 +42,7 @@ static unsigned Reentries;
 static MsiOps ops(void);
 static void reentry_probe(void) {
     if(!ProbeReentry)return;
-    MsiSession before=S;MsiOps nested=ops();nested.transaction=NULL;
+    MsiSession before=S;MsiOps nested=ops();nested.pre_reset.run=NULL;
     CHECK(S.state!=MSI_NEW);Reentries++;
     msi_run(&nested,&S,&M.observation,Prom,1048576,&SyntheticApproval,true);
     CHECK(!memcmp(&before,&S,sizeof(S)));
@@ -52,6 +54,7 @@ static void setup(enum Fault f) {
     memcpy(M.observation.reg,CaptureRegisters0,sizeof(M.observation.reg));
     M.observation.bar0_base=0x5e000000;M.observation.bar0_bytes=0x1000000;M.observation.bus=1;
     memcpy(M.config,CaptureConfig0,sizeof(M.config));
+    M.fbpa=CaptureRegisters0[REG_FBPA];
     memcpy(M.graph.edges,CaptureEdges,sizeof(CaptureEdges));M.graph.count=5;
     M.graph.console_alive=M.graph.identities_verified=true;
     memset(M.graph.console,0x11,32);memset(M.graph.boundary,0x22,32);memset(M.graph.logging,0x33,32);
@@ -104,6 +107,7 @@ static bool transaction(void *v,MsiProof *proof) {
     reentry_probe();
     Mock *m=v;CHECK(m->graph.exclusive&&m->stops==3);m->transactions++;m->config[1]|=4;
     memcpy(m->safety_regs,SafeRegisters,sizeof(SafeRegisters));
+    m->life.live_dma=2;
     *proof=(MsiProof){MSI_MARKER,true,true,true,true,2};
     if(m->fault==MARKER_FAIL)proof->marker^=1;
     if(m->fault==HALT_FAIL)proof->halted=false;
@@ -128,6 +132,8 @@ static bool read_config(void *v,unsigned offset,unsigned width,uint32_t *value) 
 static bool write_config(void *v,unsigned offset,unsigned width,uint32_t value) {
     Mock *m=v;touch(m);m->config_writes++;CHECK(offset<256&&(width==1||width==2||width==4)&&((offset&3)+width<=4));
     if(offset==MSI_PCIE+8&&width==2&&(value&0x8000)) {
+        if(S.state!=MSI_RESET){m->life.owner_violation=true;return false;}
+        m->life.resets++;
         CHECK(!(m->config[1]&4));m->flr_written=true;m->flr_at=m->clock;
         m->config[1]&=~7u;
         memset(m->config+4,0,6*sizeof(uint32_t));
@@ -135,6 +141,7 @@ static bool write_config(void *v,unsigned offset,unsigned width,uint32_t value) 
     }
     if(offset>=0x10&&offset<=0x24) {
         CHECK(m->flr_written&&!(m->config[1]&7)&&offset==0x24-4*m->restored_bars);
+        if(!m->restored_bars)m->life.restores++;
         m->restored_bars++;m->bar_restore_seen=true;
         if(m->fault==RESTORE_FAIL&&offset==0x18)return false;
     }
@@ -157,6 +164,7 @@ static bool read_mmio(void *v,uint32_t offset,uint32_t *value) {
         case 0x823804:*value=m->safety_regs[6];break;
         case 0x1fa7c4:*value=0xffffffff;break;
         case 0x1fa7cc:*value=0xfffff0ff;break;
+        case 0x9a0148:*value=m->fbpa;break;
         case 0x840100:*value=m->fault==PRE_SEC2_INACCESSIBLE?0xbadf5620:0x10;break;
         default:CHECK(false);return false;
     }
@@ -171,6 +179,9 @@ static bool atomic_safe(Mock *m,const MsiGuard *g,bool exclusive) {
     return guard_current(m,g)&&g->purpose==MSI_GUARD_FINAL&&
         !memcmp(m->config,m->guard_reference,sizeof(m->config))&&
         !(m->config[1]&4)&&m->flr_written&&m->clock-m->flr_at>=100000&&
+        !m->life.owner_violation&&m->life.resets==1&&m->life.restores==1&&
+        !m->life.unmaps&&!m->life.frees&&!m->life.claim_closes&&m->life.live_dma==2&&
+        (m->fbpa&0xffff0000u)!=0xbadf0000u&&
         !m->engine_running&&!memcmp(m->safety_regs,SafeRegisters,sizeof(SafeRegisters))&&
         m->graph.identities_verified&&m->graph.console_alive&&
         !m->graph.count&&m->graph.exclusive==exclusive&&
@@ -197,23 +208,29 @@ static bool prepare_dma_release(void *v,const MsiGuard *g) {
 }
 static bool prepare_claim_close(void *v){reentry_probe();Mock *m=v;CHECK(m->guard_active&&m->dma_prepared&&!m->freed&&m->graph.exclusive);m->claim_prepared=true;return m->fault!=CLOSE_CLAIM_FAIL;}
 static bool close_log(void *v){reentry_probe();Mock *m=v;CHECK(!m->log_closed);m->closes++;m->log_closed=true;return m->fault!=CLOSE_LOG_FAIL;}
+static bool lifecycle(void *v,MsiLifecycle *out){reentry_probe();*out=((Mock *)v)->life;return true;}
 static void commit_windows(void *v,const MsiGuard *g,bool *dma_retained) {
-    reentry_probe();
     Mock *m=v;
+    if(S.state!=MSI_WINDOWS_INVOKED){m->life.owner_violation=true;return;}
     if(m->transfer_commit_spent)return;
     m->transfer_commit_spent=true;
+    reentry_probe();
     if(!guard_current(m,g)||!m->log_closed)return;
     if(g->purpose==MSI_GUARD_FINAL) {
         if(!atomic_safe(m,g,true)||m->freed||m->stops!=3||!m->dma_prepared||!m->claim_prepared||!dma_retained||!*dma_retained)return;
     } else if(g->purpose!=MSI_GUARD_STOCK||m->stops||m->transactions)return;
     /* Model one indivisible guarded commit. No callback or hook from here
      * through resource release/claim close and transfer. */
-    if(g->purpose==MSI_GUARD_FINAL){m->freed=1;*dma_retained=false;m->graph.exclusive=false;}
+    if(g->purpose==MSI_GUARD_FINAL){
+        m->life.unmaps++;m->life.frees++;m->life.claim_closes++;m->life.live_dma=0;
+        m->freed=1;*dma_retained=false;m->graph.exclusive=false;
+    }
     m->windows++;
     if(m->fault!=RETURNED_WINDOWS){m->guard_active=false;longjmp(Transfer,1);}
 }
 static MsiOps ops(void) {
-    MsiOps o={&M,observe,snapshot,stage_windows,silence,disconnect,claim,restore_decode,transaction,
+    MsiOps o={&M,observe,snapshot,stage_windows,silence,disconnect,claim,restore_decode,
+              {MSI_PRE_RESET_RETAINED_V1,transaction},lifecycle,
               read_config,write_config,stall,read_mmio,begin_guard,guard_valid,prepare_dma_release,prepare_claim_close,close_log,commit_windows};
     return o;
 }
@@ -286,7 +303,7 @@ static void workflow_tests(void) {
     unsigned stops=M.stops,tx=M.transactions;
     MsiOps o=ops();msi_run(&o,&S,&M.observation,Prom,1048576,&SyntheticApproval,true);
     CHECK(M.stops==stops&&M.transactions==tx&&M.windows==1);
-    setup(OK);o=ops();o.transaction=NULL;
+    setup(OK);o=ops();o.pre_reset.run=NULL;
     msi_run(&o,&S,&M.observation,Prom,1048576,&SyntheticApproval,true);
     CHECK(S.state==MSI_REFUSED&&!M.stops);
 }
@@ -308,10 +325,11 @@ static void ownership_tests(void) {
 }
 #include "regression_tests.h"
 #include "followup_regressions.h"
+#include "method_regressions.h"
 int main(void) {
     FILE *f=fopen("build/prom.bin","rb");CHECK(f!=NULL);Prom=malloc(1048576);CHECK(Prom);
     CHECK(fread(Prom,1,1048576,f)==1048576&&fgetc(f)==EOF);fclose(f);
-    profile_tests();ownership_tests();workflow_tests();regression_tests();followup_regressions();free(Prom);
+    profile_tests();ownership_tests();workflow_tests();regression_tests();followup_regressions();method_regressions();free(Prom);
     printf("PASS: %u host assertions, %u workflow scenarios.\n",Checks,Scenarios);
     puts("ROM/FWSEC profile, staged release, FLR quiet time/restore, DMA retention and Windows invocation: mocked only.");
     puts("No GPU access, firmware execution, payload or native UEFI backend; real candidate remains refused.");

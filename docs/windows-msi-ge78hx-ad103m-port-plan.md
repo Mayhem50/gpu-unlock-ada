@@ -107,12 +107,14 @@ release/reset/unlock hardware qualification has occurred. The host prototype
 under windows/ad103m-msi-ge78hx/port models orchestration only; its transaction
 callback does not implement GFW/FWSEC/signature/selector phases.
 
-The reference's complete gpu_unlock_610_unlock owns reset and unwind. A future
-adapter must not connect that function to our callback and perform an outer FLR
-or cleanup again. The guarded compound commit is also a new mock-only abstraction,
-not a demonstrated native UEFI sequence. These integration decisions, missing
-FBPA accessibility sampling and pre-FLR effective-readout proof remain explicit
-open gates in the checklist.
+The reference's complete gpu_unlock_610_unlock owns reset and unwind. The host
+API now admits only a typed retained pre-reset phase; session orchestration owns
+one private FLR/restore and guarded final cleanup, with lifecycle audit and
+out-of-phase/reentry tests. Never wrap/cast the complete reference into that slot.
+FBPA accessibility and pre-FLR effective readout are now independently checked,
+with a repeated proof immediately before FLR. Real firmware phases, native
+lifecycle enforcement and the guarded compound commit remain open gates; none
+is qualified as a UEFI implementation by the host-only model.
 
 The repository's tools/read_sm_rates.py uses Linux RM ioctls and is not a
 Windows validator. A Windows rate-query implementation remains future work;

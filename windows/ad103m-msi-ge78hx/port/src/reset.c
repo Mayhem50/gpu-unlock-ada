@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-#include "port.h"
+#include "reset_internal.h"
 #include <string.h>
 
 static bool config_matches(const MsiOps *o,const uint32_t reference[64],bool decode_off) {
@@ -11,11 +11,18 @@ static bool config_matches(const MsiOps *o,const uint32_t reference[64],bool dec
     return true;
 }
 bool msi_config_matches(const MsiOps *o,const uint32_t reference[64]) {
-    return o&&reference&&msi_capabilities(reference)&&config_matches(o,reference,false);
+    return o&&o->read_config&&reference&&msi_capabilities(reference)&&config_matches(o,reference,false);
 }
-bool msi_reset(const MsiOps *o,MsiSession *s,const uint32_t reference[64]) {
+bool msi_lifecycle_expected(const MsiOps *o,unsigned resets,unsigned live_dma) {
+    MsiLifecycle now={0};
+    return o&&o->lifecycle&&o->lifecycle(o->context,&now)&&!now.owner_violation&&
+        now.resets==resets&&now.restores==resets&&!now.unmaps&&!now.frees&&
+        !now.claim_closes&&now.live_dma==live_dma;
+}
+bool msi_reset_owned(const MsiOps *o,MsiSession *s,const uint32_t reference[64],unsigned live_dma) {
     uint32_t saved[64],v=0,command=0;
-    if(!o||!s||!reference||s->flrs||!s->started||!s->dma_retained||!msi_capabilities(reference))return false;
+    if(!o||!s||s->state!=MSI_RESET_READY||!reference||s->flrs||!s->started||!s->dma_retained||!msi_capabilities(reference))return false;
+    s->state=MSI_RESET_VERIFYING; /* Spend entry before any callback; no recursive owner entry. */
     /* Copy the preflight reference, never promote post-transaction state. */
     uint32_t approved[64];memcpy(approved,reference,sizeof(approved));
     for(unsigned i=0;i<64;i++)if(!o->read_config(o->context,i*4,4,&saved[i]))return false;
@@ -27,7 +34,8 @@ bool msi_reset(const MsiOps *o,MsiSession *s,const uint32_t reference[64]) {
         if(tries==100)return false;
         o->stall(o->context,1000);
     }
-    if(!config_matches(o,approved,false))return false;
+    if(!config_matches(o,approved,false)||!msi_pre_flr_checks(o,approved,&s->pre_flr)||
+       !msi_lifecycle_expected(o,0,live_dma))return false;
     s->flrs=1;s->state=MSI_RESET;
     bool wrote=o->write_config(o->context,MSI_PCIE+8,2,(saved[(MSI_PCIE+8)/4]&0xffff)|0x8000);
     /* Even a failed FLR write may have taken effect: always enforce quiet time. */

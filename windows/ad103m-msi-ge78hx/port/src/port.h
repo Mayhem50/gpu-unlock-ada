@@ -45,6 +45,23 @@ typedef struct {
     unsigned dma_live;
 } MsiProof;
 typedef struct {
+    uint32_t plm[4],readout,chip_before,chip_after;
+    unsigned attempted_mask,transport_mask,valid_mask;
+    bool readout_valid;
+} MsiPreFlrEvidence;
+typedef struct {
+    uint64_t resets,restores,unmaps,frees,claim_closes;
+    unsigned live_dma;
+    bool owner_violation;
+} MsiLifecycle;
+/* Only this phase boundary is supported. A complete upstream unlock function
+ * also owns reset/unwind and is intentionally NOT an admissible callback. */
+enum { MSI_PRE_RESET_RETAINED_V1=0x4d530101u,MSI_FULL_TRANSACTION=0x4d530102u };
+typedef struct {
+    unsigned boundary;
+    bool (*run)(void *,MsiProof *);
+} MsiPreResetStep;
+typedef struct {
     /* Remain false for the real observed candidate until reviewed separately.
      * Host tests use synthetic approval to exercise downstream states. */
     bool ownership_reviewed,console_callbacks_reviewed,windows_image_reviewed;
@@ -61,7 +78,8 @@ typedef struct {
     bool (*disconnect)(void *,unsigned driver);
     bool (*claim)(void *);
     bool (*restore_decode)(void *,unsigned io_memory_mask); /* protocol-aware IO/MEM only */
-    bool (*transaction)(void *,MsiProof *); /* mock only; no payload linked */
+    MsiPreResetStep pre_reset; /* no FLR, PCI restore, unmap/free or claim close */
+    bool (*lifecycle)(void *,MsiLifecycle *); /* RAM bookkeeping only; fail closed */
     bool (*read_config)(void *,unsigned offset,unsigned width,uint32_t *);
     bool (*write_config)(void *,unsigned offset,unsigned width,uint32_t);
     void (*stall)(void *,unsigned microseconds);
@@ -86,7 +104,7 @@ typedef struct {
      * is failure. This abstract action has ONLY a CPU mock implementation. */
     void (*commit_windows)(void *,const MsiGuard *,bool *dma_retained);
 } MsiOps;
-enum MsiState {MSI_NEW,MSI_ENTERED,MSI_REFUSED,MSI_STAGED,MSI_RELEASED,MSI_TRANSACTION,
+enum MsiState {MSI_NEW,MSI_ENTERED,MSI_REFUSED,MSI_STAGED,MSI_RELEASED,MSI_TRANSACTION,MSI_RESET_READY,MSI_RESET_VERIFYING,
                MSI_RESET,MSI_READY_TO_COMMIT,MSI_WINDOWS_INVOKED,MSI_STOPPED};
 typedef struct {
     enum MsiState state;
@@ -96,10 +114,11 @@ typedef struct {
     bool console_may_be_changed,guard_attempted,guard_retained;
     unsigned stops,transactions,flrs,windows_calls;
     unsigned failed_stage;
+    MsiPreFlrEvidence pre_flr;
 } MsiSession;
 bool msi_graph_stage(const MsiGraph *,const MsiGraph *,unsigned stage,bool exclusive);
 bool msi_config_matches(const MsiOps *,const uint32_t reference[64]);
-bool msi_reset(const MsiOps *,MsiSession *,const uint32_t reference[64]);
+bool msi_pre_flr_checks(const MsiOps *,const uint32_t reference[64],MsiPreFlrEvidence *);
 bool msi_post_reset(const MsiOps *,const uint32_t reference[64]);
 void msi_run(const MsiOps *,MsiSession *,const MsiObservation *,
              const uint8_t *,size_t,const MsiQualification *,bool consent);

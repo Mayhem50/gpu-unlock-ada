@@ -1,6 +1,6 @@
 # MSI GE78HX: evidence and validation checklist
 
-Updated 2026-10-27 against offline core f3a7795. This is a gate register,
+Updated 2026-10-27 after the host FBPA/readout and lifecycle-ownership changes. This is a gate register,
 not an execution packet. Checked means the stated evidence exists, not that
 the machine is qualified for unlock. Open items block the relevant next stage.
 Current scope: repository review and CPU tests only; no GPU queries, EFI launch,
@@ -45,7 +45,7 @@ A complete checklist is not a completed checklist or a guarantee of recovery.
   release; final compound commit revalidates state and lease at its action.
 - [x] Partial console mutation tracked before callback; terminal result on failure,
   without GPU cleanup for console-only errors or unverified automatic rollback.
-- [x] 157 CPU scenarios / 109,139 assertions; diagnostic CPU suites
+- [x] 223 CPU scenarios / 164,445 assertions; diagnostic CPU suites
   (7,925 application / 192 platform), 39 Python tests, identity and PE/source
   checks recorded passing. Counts include repeated checks, not independent requirements.
 - [x] Negative host/UEFI compilation guards and failed-build manifest invalidation.
@@ -85,20 +85,24 @@ this MSI model validation. Their scenario counts are not MSI coverage.
 
 ## 3. Repository transaction parity — before any adapter
 
-- [ ] **T1:** choose exactly one owner for FLR, PCI restore, DMA lifetime and
-  unwind. The complete reference gpu_unlock_610_unlock already resets/unwinds;
-  never connect it to transaction() and perform our outer reset again.
+- [x] **T1 (host):** session owns lifecycle scheduling. A typed pre-reset-only
+  step must retain DMA and cannot own reset/unwind; the private helper owns one
+  FLR/restore and guarded final commit alone performs cleanup. Unknown/full-core
+  boundaries, early operations, recursive/repeated reset and stale lifecycle
+  journals are refused. Native enforcement/ledger remains open under T6/T7.
 - [ ] **T2:** model/test GFW, FWSEC/FRTS/signature-version/fuse selection,
   payload publication, SEC2 completion/HALT, stock-signature restoration and
   selector phases. Require both signature phases; no early metadata change or
   free while SEC2 can consume it. Parsing/hashing is not signature acceptance.
-- [ ] **T3:** sample all four PLMs with independent PCI/chip accessibility proof.
+- [x] **T3 (host):** sample all four PLMs with independent PCI/chip accessibility proof.
   Match upstream semantics: WPR_CFG/WPR/FEAT have required values; FBPA must be
   accessible but its expected value is not an upstream pass/fail gate.
-  The wrapper currently checks three PLMs independently, not FBPA.
-- [ ] **T4:** prove effective full-rate readout after selector application and
-  before FLR, as well as afterward. The wrapper independently checks it after
-  FLR only. Prove ordered single SS0/SS1 writes, not just their final values.
+  Raw samples and transport/valid masks survive partial sampling failure.
+- [x] **T4 (host readbacks):** independently check effective readout before FLR
+  and afterward, repeating the pre-FLR proof after pending polling. All 27 rate
+  bits and transport/sentinel errors have negative regressions. Actual ordered
+  single SS0/SS1 updates and firmware phases remain open under T2, not inferred
+  from final selector values or mock proofs.
 - [ ] **T5:** reproduce post-FLR GFW completion/HALT and SEC2 reset release/scrub
   sequence with bounded errors; preserve WPR2 HI.VAL/readout checks. No guessed
   engine reset before FLR; do not leave SEC2 held in reset.

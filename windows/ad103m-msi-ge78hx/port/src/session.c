@@ -1,10 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-#include "port.h"
+#include "reset_internal.h"
 #include <string.h>
 
 static bool ready_ops(const MsiOps *o) {
     return o&&o->observe&&o->snapshot&&o->stage_windows&&o->silence_console&&o->disconnect&&o->claim&&o->restore_decode&&
-        o->transaction&&o->read_config&&o->write_config&&o->stall&&o->read_mmio&&
+        o->pre_reset.boundary==MSI_PRE_RESET_RETAINED_V1&&o->pre_reset.run&&o->lifecycle&&
+        o->read_config&&o->write_config&&o->stall&&o->read_mmio&&
         o->begin_guard&&o->guard_valid&&o->prepare_dma_release&&o->prepare_claim_close&&o->close_log&&o->commit_windows;
 }
 static bool unchanged(const MsiOps *o,const MsiObservation *baseline) {
@@ -33,18 +34,6 @@ static bool restore_decode(const MsiOps *o,const MsiObservation *base) {
     for(unsigned i=0;i<64;i++)if((now[i]|(i==1?missing:0))!=base->config[i])return false;
     return (!missing||o->restore_decode(o->context,missing))&&unchanged(o,base);
 }
-static bool payload_readbacks(const MsiOps *o) {
-    static const uint32_t offsets[]={0x82381c,0x823820,0x823804,0x1fa7c4,0x1fa7cc,0x840100};
-    static const uint32_t expected[]={MSI_FULL_SS0,MSI_FULL_SS1,0xffffffff,0xffffffff,0xfffff0ff,0x10};
-    for(unsigned i=0;i<6;i++) {
-        uint32_t v;
-        if(!o->read_mmio(o->context,offsets[i],&v))return false;
-        if(i==5) {
-            if(v==0xffffffff||(v&0xffff0000)==0xbadf0000||!(v&0x10))return false;
-        } else if(v!=expected[i])return false;
-    }
-    return true;
-}
 void msi_run(const MsiOps *o,MsiSession *s,const MsiObservation *observation,
              const uint8_t *prom,size_t bytes,const MsiQualification *q,bool consent) {
     MsiGraph base;MsiProof proof={0};MsiGuard guard={0};
@@ -57,8 +46,10 @@ void msi_run(const MsiOps *o,MsiSession *s,const MsiObservation *observation,
     if(consent&&!observation){s->state=MSI_REFUSED;return;}
     if(consent)reference=*observation;
     o=&private_ops;q=&private_q;observation=&reference;
+    if(!msi_lifecycle_expected(o,0,0)){s->state=MSI_REFUSED;return;}
     s->failed_stage=1;
     if(!o->stage_windows(o->context))goto failed;
+    if(!msi_lifecycle_expected(o,0,0))goto failed;
     s->state=MSI_STAGED;
     if(!consent) {
         s->failed_stage=2;log_attempted=true;
@@ -86,21 +77,25 @@ void msi_run(const MsiOps *o,MsiSession *s,const MsiObservation *observation,
         if(!o->disconnect(o->context,stage)||!snapshot(o,&base,stage,false))goto failed;
     }
     s->state=MSI_RELEASED;s->failed_stage=8;s->claim_attempted=true;
-    if(!o->claim(o->context)||!snapshot(o,&base,3,true)||!restore_decode(o,observation))goto failed;
+    if(!o->claim(o->context)||!snapshot(o,&base,3,true)||!restore_decode(o,observation)||
+       !msi_lifecycle_expected(o,0,0))goto failed;
     s->state=MSI_TRANSACTION;s->failed_stage=9;s->started=true;s->dma_retained=true;s->transactions=1;
-    if(!o->transaction(o->context,&proof)||!proof.completed||proof.marker!=MSI_MARKER||
+    if(!o->pre_reset.run(o->context,&proof)||!proof.completed||proof.marker!=MSI_MARKER||
        !proof.halted||!proof.permissions||!proof.selectors||!proof.dma_live||proof.dma_live>128||
+       !msi_lifecycle_expected(o,0,proof.dma_live)||
        !clear_master(o)||!msi_config_matches(o,reference.config)||
-       !payload_readbacks(o)||!snapshot(o,&base,3,true))goto failed;
+       !msi_pre_flr_checks(o,reference.config,&s->pre_flr)||!snapshot(o,&base,3,true))goto failed;
     s->failed_stage=10;
-    if(!clear_master(o)||!msi_reset(o,s,reference.config))goto failed;
+    if(!clear_master(o)||!msi_lifecycle_expected(o,0,proof.dma_live))goto failed;
+    s->state=MSI_RESET_READY;
+    if(!msi_reset_owned(o,s,reference.config,proof.dma_live)||!msi_lifecycle_expected(o,1,proof.dma_live))goto failed;
     /* One lease spans proof, DMA cleanup, claim/log close and OS transfer.
      * No unguard/reacquire window and no implicit release on any error. */
     s->guard_attempted=s->guard_retained=true;
     if(!o->begin_guard(o->context,MSI_GUARD_FINAL,reference.config,&guard)||
        !guard.epoch||guard.purpose!=MSI_GUARD_FINAL||
        !snapshot(o,&base,3,true)||!msi_post_reset(o,reference.config)||
-       !o->guard_valid(o->context,&guard))goto failed;
+       !o->guard_valid(o->context,&guard)||!msi_lifecycle_expected(o,1,proof.dma_live))goto failed;
     s->failed_stage=11;
     if(!o->prepare_dma_release(o->context,&guard))goto failed;
     s->failed_stage=12;
@@ -110,7 +105,7 @@ void msi_run(const MsiOps *o,MsiSession *s,const MsiObservation *observation,
     if(!o->close_log(o->context)){s->cleanup_failed=true;goto failed;}
     s->failed_stage=14;
     if(!snapshot(o,&base,3,true)||!msi_post_reset(o,reference.config)||
-       !o->guard_valid(o->context,&guard))goto failed;
+       !o->guard_valid(o->context,&guard)||!msi_lifecycle_expected(o,1,proof.dma_live))goto failed;
     s->failed_stage=15;s->state=MSI_WINDOWS_INVOKED;s->windows_calls=1;
     o->commit_windows(o->context,&guard,&s->dma_retained);
     /* Returning does not prove Windows, NVIDIA bind or display recovery. */
