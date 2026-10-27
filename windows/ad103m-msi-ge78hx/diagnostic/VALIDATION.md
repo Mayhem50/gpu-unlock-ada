@@ -6,11 +6,11 @@ No PnP/CIM/NVML/CUDA collector, firmware program or GPU benchmark was run.
 
 Results:
 
-- C application mocks: 6,594 assertions passed. The EFI entry point runs
+- C application mocks: 7,857 assertions passed. The EFI entry point runs
   against mock protocols and in-memory PCI/PROM/register data.
 - C platform mocks: 192 assertions passed for loaded PE parsing and bounded
   protocol graph capture.
-- Python: 19 tests passed, covering PE rejection, capture mutation rejection,
+- Python: 22 tests passed, covering PE rejection, capture mutation rejection,
   driver digest validation, semantic graph comparison and unresolved graphs.
 - PowerShell: pure identity tests passed for the expected PCI/NVML strings,
   duplicate GPUs, wrong device/subsystem/revision, driver and VBIOS.
@@ -28,13 +28,21 @@ static source checks reject forbidden access call sites.
 Local artifact: build/AD103M-PROBE.EFI
 
 SHA-256:
-5dff6eee4c6ed68f33221785038877caa858b001284db8b0aba3ef1a5809e744
+9a9a6b7c14653cac720f3a3bfd1f38c2936aad7ea8bf2bb2f50c5cc3ad961825
 
 Regression coverage added after review:
 
-- MMIO failure, invalid chip, identity drift, final chip-read failure and BADF
-  readout skip PROM sampling. Failed register capture also skips the extended
-  PCI-config read; the failed snapshot is still written for diagnosis.
+- MMIO transport failure, invalid chip, identity drift, final chip-read failure
+  and BADF at required registers skip PROM sampling. The failed snapshot is
+  still written for diagnosis.
+- Version 0.4.1 adds a distinct partial classification for successful
+  SEC2_CPUCTL reads returning BADF (including the captured 0xbadf5620).
+  With stable PCI and final AD103 identity, it permits only the independently
+  guarded PROM capture. The register snapshot remains incomplete. A full
+  mocked application run produces a validated PROM with this exact sentinel.
+- Regression tests combine optional SEC2 BADF with final-chip failure,
+  identity drift, active BME, missing memory decode, invalid BAR and wrong
+  chip. All block PROM access. An EFI read error at SEC2 also remains blocking.
 - A full application run with a 4 MiB cached ROM and 1 MiB PROM generates a
   valid report above 10 MiB, then passes the Python capture validator.
 - The report buffer is 64 MiB to cover the bounded path/graph/code/ROM maxima;

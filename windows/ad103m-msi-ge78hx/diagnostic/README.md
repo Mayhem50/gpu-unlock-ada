@@ -48,7 +48,18 @@ relocated driver code produce an unknown result, never a passing comparison.
 GOP parents, active console associations, console paths and ConIn/ConOut
 variables are compared separately as topology_matches. Array/handle ordering
 is normalized. Empty complete graphs or inconsistent target references are
-rejected. A failed register snapshot prevents further PROM sampling.
+rejected.
+
+Version 0.4.1 distinguishes a successful SEC2_CPUCTL read returning a BADF
+sentinel from a transport error. Only that specific register/value class can
+produce classification=sec2_cpuctl_unavailable with prom_read_allowed=true.
+The register snapshot stays complete=false; its raw value is preserved.
+All 22 samples must have been attempted, the PCI header must be unchanged,
+and a final chip read must still match AD103 before continuation is allowed.
+SampleProm then independently repeats its PCI/BAR/BME and chip checks.
+Transport errors, BADF at other registers, identity drift and failed final
+chip reads still block PROM sampling. No inaccessible register is treated as
+valid, and this classification never authorizes an unlock.
 The report reserves 64 MiB to fit the bounded ROM, paths, code and graph data;
 a maximum-size ROM capture is exercised through the complete mocked entry
 point and validated offline.

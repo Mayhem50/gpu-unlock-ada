@@ -52,10 +52,12 @@ static const CHAR8 *CaptureGuard(EFI_PCI_IO_PROTOCOL *pci,EFI_BOOT_SERVICES *bs,
     if(!ok) return "bar0_descriptor_mismatch";
     return NULL;
 }
+/* result permits only the next independently guarded PROM read, never unlock. */
 UINTN SampleRegisters(TEXT *t,EFI_PCI_IO_PROTOCOL *pci,EFI_BOOT_SERVICES *bs,BOOLEAN *result) {
     UINT32 words[16],after[16],values[22],last_chip=0;
     EFI_STATUS statuses[22],status;UINTN i,attempts=0,completed=0;
     UINT64 length=0x009a014c;BOOLEAN complete=TRUE,identity_stable=FALSE;
+    BOOLEAN sec2_unavailable=FALSE,final_identity_valid=FALSE,prom_allowed=FALSE;
     const CHAR8 *reason=CaptureGuard(pci,bs,words);
     if(result)*result=FALSE;
     if(reason) {Failure(t,reason);return 0;}
@@ -70,6 +72,12 @@ UINTN SampleRegisters(TEXT *t,EFI_PCI_IO_PROTOCOL *pci,EFI_BOOT_SERVICES *bs,BOO
         TextPut(t,",\"status\":");TextHex(t,statuses[i],16);TextPut(t,",\"value\":");
         if(EFI_ERROR(statuses[i])) TextPut(t,"null");else TextHex(t,values[i],8);TextPut(t,"}");
         completed++;
+        /* Only a successful read returning the SEC2 diagnostic BADF sentinel
+         * is optional. Transport errors and BADF at other offsets remain fatal. */
+        if(!EFI_ERROR(statuses[i])&&Registers[i].offset==0x00840100&&
+           (values[i]&0xffff0000u)==0xbadf0000u) {
+            sec2_unavailable=TRUE;complete=FALSE;continue;
+        }
         if(EFI_ERROR(statuses[i])||(values[i]&0xffff0000u)==0xbadf0000u||
             (i==0&&values[i]!=0x193000a1u)) {complete=FALSE;break;}
     }
@@ -78,15 +86,20 @@ UINTN SampleRegisters(TEXT *t,EFI_PCI_IO_PROTOCOL *pci,EFI_BOOT_SERVICES *bs,BOO
     identity_stable=(BOOLEAN)(!EFI_ERROR(status)&&BytesEqual(words,after,sizeof(words)));
     TextPut(t,",\"pci_snapshot_unchanged\":");TextPut(t,identity_stable?"true":"false");
     TextPut(t,",\"final_chip\":");
-    if(complete&&identity_stable) {
+    if((complete||sec2_unavailable)&&completed==22&&identity_stable) {
         attempts++;status=pci->Mem.Read(pci,EfiPciIoWidthUint32,0,0,1,&last_chip);
         if(EFI_ERROR(status)) TextPut(t,"null");else TextHex(t,last_chip,8);
-        complete=(BOOLEAN)(!EFI_ERROR(status)&&last_chip==values[0]&&completed==22);
+        final_identity_valid=(BOOLEAN)(!EFI_ERROR(status)&&last_chip==values[0]&&last_chip==0x193000a1u);
+        complete=(BOOLEAN)(complete&&final_identity_valid);
     } else {TextPut(t,"null");complete=FALSE;}
     TextPut(t,",\"read_attempts\":");TextDec(t,attempts);
     TextPut(t,",\"complete\":");TextPut(t,complete?"true":"false");
+    prom_allowed=(BOOLEAN)(final_identity_valid&&identity_stable&&completed==22&&!t->failed);
+    TextPut(t,",\"classification\":\"");
+    TextPut(t,prom_allowed?(sec2_unavailable?"sec2_cpuctl_unavailable":"complete"):"blocked");
+    TextPut(t,"\",\"prom_read_allowed\":");TextPut(t,prom_allowed?"true":"false");
     TextPut(t,",\"unlock_eligibility\":false}");
-    if(result)*result=(BOOLEAN)(complete&&!t->failed);
+    if(result)*result=(BOOLEAN)(prom_allowed&&!t->failed);
     return attempts;
 }
 

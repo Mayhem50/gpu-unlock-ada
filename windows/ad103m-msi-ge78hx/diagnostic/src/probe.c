@@ -235,9 +235,9 @@ static void ConsolePath(TEXT *t,EFI_SYSTEM_TABLE *st,EFI_HANDLE h) {
 EFI_STATUS EFIAPI UefiMain(EFI_HANDLE image,EFI_SYSTEM_TABLE *st) {
     TEXT t;EFI_FILE_PROTOCOL *log=NULL;EFI_STATUS s,flush_status,close_status;UINTN size,mmio_attempts=0,index;CHAR16 filename[13];
     DISPLAY *target=NULL;
-    BOOLEAN registers_complete=FALSE;
+    BOOLEAN prom_read_allowed=FALSE;
     if(!st||!st->BootServices||!st->RuntimeServices||RelocationAnchor!=Report) return EFI_INVALID_PARAMETER;
-    Message(st,L"MSI GE78HX AD103M diagnostic v0.4.0 - no GPU writes or unlock.\r\n");
+    Message(st,L"MSI GE78HX AD103M diagnostic v0.4.1 - no GPU writes or unlock.\r\n");
     s=OpenLog(image,st,&log,filename);
     if(EFI_ERROR(s)||!log) {Message(st,L"USB path not confirmed, or log unavailable. Returning to firmware.\r\n");return EFI_ERROR(s)?s:EFI_DEVICE_ERROR;}
     TextInit(&t,Report,sizeof(Report));
@@ -256,13 +256,13 @@ EFI_STATUS EFIAPI UefiMain(EFI_HANDLE image,EFI_SYSTEM_TABLE *st) {
     if(EnumerationComplete&&TargetCount==1&&ExactCount==1)
         for(index=0;index<DisplayCount;index++) if(ExactTarget(Displays[index].config,64)) target=&Displays[index];
     TextPut(&t,",\"register_snapshot\":");
-    if(target) mmio_attempts=SampleRegisters(&t,target->pci,st->BootServices,&registers_complete);
+    if(target) mmio_attempts=SampleRegisters(&t,target->pci,st->BootServices,&prom_read_allowed);
     else TextPut(&t,"{\"guard_passed\":false,\"reason\":\"no_unique_target\",\"read_attempts\":0,\"complete\":false}");
     TextPut(&t,",\"physical_prom\":");
-    if(target&&registers_complete) mmio_attempts+=SampleProm(&t,target->pci,st->BootServices);
+    if(target&&prom_read_allowed) mmio_attempts+=SampleProm(&t,target->pci,st->BootServices);
     else TextPut(&t,"{\"guard_passed\":false,\"reason\":\"register_snapshot_unavailable\",\"read_attempts\":0,\"complete\":false}");
     TextPut(&t,",\"config256\":");
-    if(target&&registers_complete) {
+    if(target&&prom_read_allowed) {
         UINT32 extended[64];
         s=target->pci->Pci.Read(target->pci,EfiPciIoWidthUint32,0,64,extended);
         if(!EFI_ERROR(s)&&BytesEqual(extended,target->config,64)) TextBytes(&t,(UINT8 *)extended,sizeof(extended));

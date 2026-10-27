@@ -33,7 +33,7 @@ static UINTN MemoryReads,PromReads;
 static BOOLEAN FailMemory,CorruptResource,ChangeIdentity;
 static UINT32 Chip;
 static UINTN FailureRead;
-static BOOLEAN BadfValue;
+static BOOLEAN BadfValue,Sec2Badf;
 
 static EFI_STATUS EFIAPI ConfigRead(EFI_PCI_IO_PROTOCOL *self,EFI_PCI_IO_PROTOCOL_WIDTH width,UINT32 off,UINTN count,VOID *out) {
     CHECK(width==EfiPciIoWidthUint32&&off==0&&(count==16||count==64));ConfigReads++;
@@ -55,6 +55,7 @@ static EFI_STATUS EFIAPI MemoryRead(EFI_PCI_IO_PROTOCOL *self,EFI_PCI_IO_PROTOCO
     CHECK(found);MemoryReads++;
     if(FailMemory&&MemoryReads==FailureRead) return EFI_DEVICE_ERROR;
     if(BadfValue&&MemoryReads==2) {*(UINT32 *)out=0xbadf0000;return EFI_SUCCESS;}
+    if(Sec2Badf&&offset==0x840100) {*(UINT32 *)out=0xbadf5620;return EFI_SUCCESS;}
     if(ChangeIdentity&&MemoryReads==1) Config[0][8]^=1;
     *(UINT32 *)out=offset==0?Chip:0;
     return EFI_SUCCESS;
@@ -156,7 +157,7 @@ static void Setup(unsigned scenario) {
     Scenario=scenario;ConfigReads=BarReads=FileWrites=ExistingOpens=RootCloses=DirCloses=LogCloses=0;
     FailedConfig=FailedLocation=FailedLog=ShortWrite=FailedFlush=ExistingFirst=NonUsb=FALSE;
     MemoryReads=0;PromReads=0;FailMemory=CorruptResource=ChangeIdentity=FALSE;Chip=0x193000a1u;
-    FailureRead=2;BadfValue=FALSE;
+    FailureRead=2;BadfValue=FALSE;Sec2Badf=FALSE;
     memset(MockProm,0,sizeof(MockProm));MockProm[0]=0xaa55;FailProm=FALSE;
 }
 static void TestCore(void) {
@@ -251,6 +252,32 @@ static void TestSampler(void) {
     Setup(0);Config[0][8]=0xa2;TextInit(&t,buffer,sizeof(buffer));
     CHECK(SampleRegisters(&t,&MockPci[0],&Bs,NULL)==0&&MemoryReads==0);
 }
+static void TestSec2Classification(void) {
+    CHAR8 buffer[8192];TEXT t;BOOLEAN allowed=TRUE;
+    Setup(0);Sec2Badf=TRUE;TextInit(&t,buffer,sizeof(buffer));
+    CHECK(SampleRegisters(&t,&MockPci[0],&Bs,&allowed)==23&&allowed);
+    CHECK(strstr(buffer,"\"classification\":\"sec2_cpuctl_unavailable\"")&&strstr(buffer,"\"complete\":false"));
+    CHECK(strstr(buffer,"\"final_chip\":\"0x193000a1\""));
+    Setup(0);Sec2Badf=TRUE;CHECK(UefiMain(Image,&St)==EFI_SUCCESS);
+    CHECK(PromReads==257&&MemoryReads==25&&strstr(Written,"sec2_cpuctl_unavailable"));
+    CHECK(strstr(Written,"\"physical_prom\":{\"guard_passed\":true")&&strstr(Written,"\"unlock_eligibility\":false"));
+    {FILE *f=fopen("build/sec2-capture.json","wb");CHECK(f!=NULL);
+     CHECK(fwrite(Written,1,strlen(Written),f)==strlen(Written));CHECK(fclose(f)==0);}
+    Setup(0);Sec2Badf=TRUE;ChangeIdentity=TRUE;CHECK(UefiMain(Image,&St)==EFI_SUCCESS);
+    CHECK(PromReads==0&&MemoryReads==22);
+    Setup(0);Sec2Badf=TRUE;FailMemory=TRUE;FailureRead=23;CHECK(UefiMain(Image,&St)==EFI_SUCCESS);
+    CHECK(PromReads==0&&MemoryReads==23);
+    Setup(0);FailMemory=TRUE;FailureRead=22;CHECK(UefiMain(Image,&St)==EFI_SUCCESS);
+    CHECK(PromReads==0&&MemoryReads==22);
+    Setup(0);Sec2Badf=TRUE;Config[0][4]=7;CHECK(UefiMain(Image,&St)==EFI_SUCCESS);
+    CHECK(PromReads==0&&MemoryReads==0);
+    Setup(0);Sec2Badf=TRUE;Config[0][4]=0;CHECK(UefiMain(Image,&St)==EFI_SUCCESS);
+    CHECK(PromReads==0&&MemoryReads==0);
+    Setup(0);Sec2Badf=TRUE;CorruptResource=TRUE;CHECK(UefiMain(Image,&St)==EFI_SUCCESS);
+    CHECK(PromReads==0&&MemoryReads==0);
+    Setup(0);Sec2Badf=TRUE;Chip=0x194000a1;CHECK(UefiMain(Image,&St)==EFI_SUCCESS);
+    CHECK(PromReads==0&&MemoryReads==1);
+}
 static void TestProm(void) {
     static CHAR8 buffer[3*1024*1024];TEXT t;
     Setup(0);Chip=0x194000a1;TextInit(&t,buffer,sizeof(buffer));
@@ -266,4 +293,4 @@ static void TestProm(void) {
     Setup(0);FailProm=TRUE;TextInit(&t,buffer,sizeof(buffer));
     CHECK(SampleProm(&t,&MockPci[0],&Bs)==4&&strstr(buffer,"\"hex\":null")&&strstr(buffer,"\"complete\":false"));
 }
-int main(void) {TestCore();TestApplication();TestSampler();TestProm();printf("PASS: %u checks; full EFI application executed against host mocks; no GPU hardware accessed.\n",Checks);return 0;}
+int main(void) {TestCore();TestApplication();TestSampler();TestProm();TestSec2Classification();printf("PASS: %u checks; full EFI application executed against host mocks; no GPU hardware accessed.\n",Checks);return 0;}

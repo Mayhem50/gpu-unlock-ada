@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 def analyze(data, build_id):
-    if data.get('schema') != 4 or data.get('probe_version') != '0.4.0':
+    if data.get('schema') != 4 or data.get('probe_version') not in ('0.4.0','0.4.1'):
         raise ValueError('Unsupported capture schema/version')
     if data.get('build_id') != build_id:
         raise ValueError('Capture build_id does not match the selected manifest')
@@ -53,6 +53,34 @@ def analyze(data, build_id):
     for sample in samples:
         if sample.get('value') is not None and not re.fullmatch(r'0x[0-9a-f]{8}',sample['value']):
             raise ValueError('Malformed sampled register')
+    result['register_classification']=snapshot.get('classification','legacy_or_unavailable')
+    if data.get('probe_version')=='0.4.1':
+        allowed=snapshot.get('prom_read_allowed',False)
+        classification=snapshot.get('classification','blocked')
+        if type(allowed) is not bool:
+            raise ValueError('Invalid PROM continuation flag')
+        if allowed:
+            if classification not in ('complete','sec2_cpuctl_unavailable'):
+                raise ValueError('Unknown register continuation classification')
+            if (attempts!=23 or len(samples)!=22 or snapshot.get('guard_passed') is not True or
+                snapshot.get('pci_snapshot_unchanged') is not True or snapshot.get('final_chip')!='0x193000a1' or
+                samples[0].get('value')!='0x193000a1'):
+                raise ValueError('Continuation requires stable identity and all bounded samples')
+            for i,sample in enumerate(samples):
+                if sample.get('status')!='0x0000000000000000' or sample.get('value') is None:
+                    raise ValueError('Transport failure cannot permit continuation')
+                badf=int(sample['value'],16)&0xffff0000==0xbadf0000
+                if badf and not (i==21 and classification=='sec2_cpuctl_unavailable'):
+                    raise ValueError('Only SEC2 BADF may permit continuation')
+            sec2_badf=int(samples[21]['value'],16)&0xffff0000==0xbadf0000
+            if (classification=='sec2_cpuctl_unavailable')!=sec2_badf:
+                raise ValueError('Classification does not match SEC2 readout')
+            if snapshot.get('complete') is not (not sec2_badf):
+                raise ValueError('Partial SEC2 readout must remain incomplete')
+        elif classification!='blocked' or snapshot.get('complete') is True:
+            raise ValueError('Blocked snapshot has inconsistent continuation fields')
+        if prom_attempts and not allowed:
+            raise ValueError('PROM read after a blocking register result')
     platform=data.get('platform',{})
     result['platform_graph_complete']=False
     result['driver_code_captures_verified']=0
