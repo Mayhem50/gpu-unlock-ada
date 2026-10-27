@@ -6,6 +6,10 @@ It has no native hardware adapter, EFI entry point, linked unlock payload,
 firmware installer or automatic reboot path. Building it does not access the GPU.
 The real candidate remains unqualified and refused.
 
+The [offline review](../../../docs/windows-msi-ge78hx-offline-port-review.md)
+reproduces four defects that the passing baseline suite misses. Resolve them
+and specify the remaining adapter contracts before preparing a native backend.
+
 ## Reproduce the offline validation
 
 From the repository root, with Python and the MSVC x64 C toolchain installed:
