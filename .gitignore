@@ -31,6 +31,11 @@ Module.symvers
 /windows/ad104-msi/build/
 /windows/ad104-msi/local/
 /windows/ad104-msi/diagnostic/build/
+# MSI GE78HX AD103M port: hardware captures, derived profile data and builds
+# are machine-private and must never be committed.
+/windows/ad103m-msi-ge78hx/build/
+/windows/ad103m-msi-ge78hx/local/
+/windows/ad103m-msi-ge78hx/captures/
 *.EFI
 *.efi
 *.exe
