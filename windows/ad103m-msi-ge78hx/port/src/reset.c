@@ -2,6 +2,13 @@
 #include "reset_internal.h"
 #include <string.h>
 
+bool msi_stock_retention(bool *retained,const MsiLifecycle *life,bool readable) {
+    if(!retained)return false;
+    bool clean=readable&&life&&!life->owner_violation&&!life->resets&&!life->restores&&
+        !life->unmaps&&!life->frees&&!life->claim_closes&&!life->live_dma;
+    if(!clean)*retained=true;
+    return clean&&!*retained;
+}
 bool msi_reset_gate_take(MsiResetGate *gate,bool authorized) {
     if(!gate)return false;
     if(gate->spent||gate->violation||!authorized){gate->violation=true;return false;}

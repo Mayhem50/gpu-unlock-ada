@@ -54,6 +54,9 @@ typedef struct {
     unsigned live_dma;
     bool owner_violation;
 } MsiLifecycle;
+/* RAM-only classification, independent of lease/log validity. Never clears
+ * an existing retention requirement, including after journal repair. */
+bool msi_stock_retention(bool *retained,const MsiLifecycle *,bool readable);
 /* Backend-owned, session-lifetime gate, independent of mutable statistics.
  * Consume before any callback/write. Never rearm on error or counter repair. */
 typedef struct {bool spent,violation;} MsiResetGate;
@@ -110,6 +113,8 @@ typedef struct {
      * is failure. A STOCK commit must also revalidate clean scoped lifecycle at the
      * action itself; unreadable/dirty bookkeeping sets dma_retained true and
      * refuses transfer without GPU queries, reset or cleanup.
+     * Record that uncertainty before EVERY early exit, even with an invalid
+     * lease, log, state, token or repeated commit attempt.
      * This abstract action has ONLY a CPU mock implementation. */
     void (*commit_windows)(void *,const MsiGuard *,bool *dma_retained);
 } MsiOps;

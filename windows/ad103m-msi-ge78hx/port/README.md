@@ -120,7 +120,7 @@ console-only failure. No automatic console rollback is claimed.
 
 ## Validation result — 2026-10-27
 
-The offline C suite passed **190,413 assertions across 304 workflow scenarios**.
+The offline C suite passed **191,252 assertions across 410 workflow scenarios**.
 Coverage includes both captures, profile/ROM mutations, missing/extra/duplicate
 owners, each partially failed detach, boundary/console/logging drift, exclusive
 claim failure, narrow decode restoration, invalid transaction proofs, inaccessible
@@ -175,10 +175,14 @@ handoff checks clean scoped lifecycle after log close and guard acquisition,
 then independently inside its final action. Dirty or unreadable state is terminal
 and retains uncertain resources/guard; stock failure adds no PCI/MMIO access or
 automatic cleanup. Native enforcement and actual recovery remain unqualified.
-The [review of F3/F4](../../../docs/windows-msi-ge78hx-f3-f4-review.md) confirms
-the reset gate cases but reproduces F5: invalid stock lease combined with dirty
-resources refuses handoff while incorrectly leaving dma_retained false. This
-combined-fault retention report is still open; no buffer is freed by the probe.
+The [F5 review and remediation](../../../docs/windows-msi-ge78hx-f3-f4-review.md)
+adds shared RAM-only classification independent of lease/log validity before
+every stock early exit. `tests/retention_regressions.h` integrates the original
+three reproductions and combined-fault matrix. Dirty/missing/unreadable resources
+set dma_retained even with broken/changed/missing lease data; journal repair or
+replay never clears it. Known-clean controls retain correct reporting. No GPU
+access, reset, free or handoff is added to any failure path. This remains a host
+model contract; native bookkeeping/exclusion and recovery are unqualified.
 
 The diagnostic's unchanged CPU suites also passed (7,925 application checks and
 192 platform checks), along with 39 Python tests, pure PowerShell identity tests

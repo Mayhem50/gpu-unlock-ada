@@ -234,24 +234,34 @@ static bool lifecycle(void *v,MsiLifecycle *out) {
     out->owner_violation|=m->reset_gate.violation||(m->reset_gate.spent&&m->life.resets!=1);
     return true;
 }
-static bool stock_lifecycle_clean(const Mock *m) {
-    return !m->lifecycle_unreadable&&!m->reset_gate.spent&&!m->reset_gate.violation&&
-        !m->life.owner_violation&&!m->life.resets&&!m->life.restores&&
-        !m->life.unmaps&&!m->life.frees&&!m->life.claim_closes&&!m->life.live_dma;
+static bool record_stock_retention(const Mock *m,bool *retained) {
+    MsiLifecycle inventory=m->life;
+    inventory.owner_violation|=m->reset_gate.spent||m->reset_gate.violation;
+    return msi_stock_retention(retained,&inventory,!m->lifecycle_unreadable);
 }
 static void commit_windows(void *v,const MsiGuard *g,bool *dma_retained) {
     Mock *m=v;
-    if(S.state!=MSI_WINDOWS_INVOKED){m->life.owner_violation=true;return;}
+    /* Determine the stock role from backend mode as well as the token; lease
+     * validation must not gate accounting of owned resources. Unknown mode
+     * is classified conservatively too. These are RAM reads only. */
+    bool stock_or_unknown=!m->transactions||m->guard_purpose!=MSI_GUARD_FINAL||
+        (g&&g->purpose==MSI_GUARD_STOCK);
+    if(stock_or_unknown)(void)record_stock_retention(m,dma_retained);
+    if(S.state!=MSI_WINDOWS_INVOKED){
+        m->life.owner_violation=true;
+        if(stock_or_unknown)(void)record_stock_retention(m,dma_retained);
+        return;
+    }
     if(m->transfer_commit_spent)return;
     m->transfer_commit_spent=true;
     reentry_probe();
+    if(stock_or_unknown)(void)record_stock_retention(m,dma_retained);
     if(!guard_current(m,g)||!m->log_closed)return;
     if(g->purpose==MSI_GUARD_FINAL) {
         if(!atomic_safe(m,g,true)||m->freed||m->stops!=3||!m->dma_prepared||!m->claim_prepared||!dma_retained||!*dma_retained)return;
     } else {
         if(g->purpose!=MSI_GUARD_STOCK||m->stops||m->transactions)return;
-        if(!stock_lifecycle_clean(m)){if(dma_retained)*dma_retained=true;return;}
-        if(!dma_retained||*dma_retained)return;
+        if(!record_stock_retention(m,dma_retained))return;
     }
     /* Model one indivisible guarded commit. No callback or hook from here
      * through resource release/claim close and transfer. */
@@ -361,10 +371,11 @@ static void ownership_tests(void) {
 #include "followup_regressions.h"
 #include "method_regressions.h"
 #include "lifecycle_regressions.h"
+#include "retention_regressions.h"
 int main(void) {
     FILE *f=fopen("build/prom.bin","rb");CHECK(f!=NULL);Prom=malloc(1048576);CHECK(Prom);
     CHECK(fread(Prom,1,1048576,f)==1048576&&fgetc(f)==EOF);fclose(f);
-    profile_tests();ownership_tests();workflow_tests();regression_tests();followup_regressions();method_regressions();lifecycle_regressions();free(Prom);
+    profile_tests();ownership_tests();workflow_tests();regression_tests();followup_regressions();method_regressions();lifecycle_regressions();retention_regressions();free(Prom);
     printf("PASS: %u host assertions, %u workflow scenarios.\n",Checks,Scenarios);
     puts("ROM/FWSEC profile, staged release, FLR quiet time/restore, DMA retention and Windows invocation: mocked only.");
     puts("No GPU access, firmware execution, payload or native UEFI backend; real candidate remains refused.");

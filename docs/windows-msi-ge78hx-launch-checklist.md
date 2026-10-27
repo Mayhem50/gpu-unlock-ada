@@ -45,7 +45,7 @@ A complete checklist is not a completed checklist or a guarantee of recovery.
   release; final compound commit revalidates state and lease at its action.
 - [x] Partial console mutation tracked before callback; terminal result on failure,
   without GPU cleanup for console-only errors or unverified automatic rollback.
-- [x] 304 CPU scenarios / 190,413 assertions; diagnostic CPU suites
+- [x] 410 CPU scenarios / 191,252 assertions; diagnostic CPU suites
   (7,925 application / 192 platform), 39 Python tests, identity and PE/source
   checks recorded passing. Counts include repeated checks, not independent requirements.
 - [x] Negative host/UEFI compilation guards and failed-build manifest invalidation.
@@ -127,13 +127,13 @@ this MSI model validation. Their scenario counts are not MSI coverage.
 
 - [ ] **V1:** explicit stock/no-unlock mode and stock postconditions.
   Current synthetic unlocked-selector success flow is not this test.
-- [ ] **V0 (host, F4 partial under combined faults):** clean scoped lifecycle checked after stock log
+- [x] **V0 (host, F4/F5 corrected):** clean scoped lifecycle checked after stock log
   close and guard acquisition/validation, and independently at stock commit.
   Dirty/unavailable state retains uncertain resources/guard and requires terminal
-  handling for the single-fault cases. The [latest review](windows-msi-ge78hx-f3-f4-review.md)
-  reproduces F5: an invalid lease plus live/unknown resources skips the retention
-  flag update. Windows/free remain blocked, but resource uncertainty must be
-  recorded on all early exits. Stock recovery on hardware remains V1–V4.
+  handling, including combined faults. The [F5 remediation](windows-msi-ge78hx-f3-f4-review.md)
+  records resource uncertainty before every stock early exit independently of
+  lease/log validity. Repair/replay cannot erase retention. Stock recovery on
+  hardware remains V1–V4, not proved by these CPU results.
 - [ ] **V2:** independently validate release-only, reset and stock Windows
   handoff in staged tests. Reset is a GPU mutation; none is authorized here.
 - [ ] **V3:** before future hardware trials: idle workloads, saved work, AC,

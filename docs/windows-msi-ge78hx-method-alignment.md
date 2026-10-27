@@ -77,7 +77,7 @@ The design and workspace entry point are updated accordingly. The initial review
 changed no code; the subsequent remediation adds host checks and regressions.
 No adapter is prepared.
 
-Current validation after remediation: 304 host scenarios / 190,413 assertions
+Current validation after remediation: 410 host scenarios / 191,252 assertions
 and 39 Python tests pass. Local documentation links and whitespace checks pass;
 the existing diagnostic EFI hash is unchanged. This does not include a rerun of
 the AD104 full core or Linux test-full suites and supplies no native MSI evidence.
@@ -88,7 +88,8 @@ spent backend gate independent of counters, and stock commit revalidates clean
 scoped lifecycle at the action point. Both remain trusted host contracts,
 separate from native qualification.
 
-The [F3/F4 follow-up review](windows-msi-ge78hx-f3-f4-review.md) confirms the
-reset gate cases and records one remaining combined-fault gap (F5): an invalid
-stock lease can bypass resource-uncertainty reporting. Handoff/free remain
-refused, but V0 is partial until the retention flag is correct on all exits.
+The [F3/F4 follow-up review and remediation](windows-msi-ge78hx-f3-f4-review.md)
+confirms the reset gate cases and records F5, now covered by integrated combined
+fault regressions. Stock resource uncertainty is classified independently before
+lease/log/state/replay exits, and retention remains sticky after journal repair.
+V0 is complete as a host contract only; native qualification is still open.
