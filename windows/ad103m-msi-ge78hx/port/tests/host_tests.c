@@ -8,6 +8,7 @@
 #include <setjmp.h>
 
 static unsigned Checks,Scenarios;
+static const uint32_t SafeRegisters[]={MSI_CHIP,0x10,0,MSI_FULL_SS0,MSI_FULL_SS1,0,0xffffffff};
 #define CHECK(x) do{Checks++;if(!(x)){fprintf(stderr,"FAIL %s:%d %s\n",__FILE__,__LINE__,#x);exit(1);}}while(0)
 enum Fault {OK,STAGE_FAIL,OBSERVE_DRIFT,EXTRA_OWNER,STOP1_FAIL,STOP2_FAIL,STOP3_FAIL,
  CONSOLE_DRIFT,BOUNDARY_DRIFT,USB_DRIFT,CLAIM_FAIL,TX_FAIL,MARKER_FAIL,HALT_FAIL,PERMISSION_FAIL,
@@ -20,6 +21,14 @@ typedef struct {
     unsigned stops,transactions,stages,snapshots,observations,claims,freed,closes,windows;
     uint64_t clock,flr_at;bool silenced,flr_written,log_closed,bar_restore_seen;
     unsigned restored_bars,mmio_reads;
+    bool guard_active,guard_broken,engine_running;
+    uint64_t guard_epoch;unsigned guard_purpose;
+    uint32_t guard_reference[64];
+    MsiGraph guard_graph;
+    unsigned config_reads,config_writes;
+    uint32_t safety_regs[7];
+    bool dma_commit_spent,transfer_commit_spent;
+    bool dma_prepared,claim_prepared;
 } Mock;
 static Mock M;
 static MsiSession S;
@@ -94,6 +103,7 @@ static bool restore_decode(void *v,unsigned mask) {
 static bool transaction(void *v,MsiProof *proof) {
     reentry_probe();
     Mock *m=v;CHECK(m->graph.exclusive&&m->stops==3);m->transactions++;m->config[1]|=4;
+    memcpy(m->safety_regs,SafeRegisters,sizeof(SafeRegisters));
     *proof=(MsiProof){MSI_MARKER,true,true,true,true,2};
     if(m->fault==MARKER_FAIL)proof->marker^=1;
     if(m->fault==HALT_FAIL)proof->halted=false;
@@ -101,7 +111,7 @@ static bool transaction(void *v,MsiProof *proof) {
     return m->fault!=TX_FAIL&&m->fault!=CONTAINMENT_FAIL;
 }
 static bool read_config(void *v,unsigned offset,unsigned width,uint32_t *value) {
-    Mock *m=v;touch(m);CHECK(offset<256&&(width==1||width==2||width==4)&&((offset&3)+width<=4));
+    Mock *m=v;touch(m);m->config_reads++;CHECK(offset<256&&(width==1||width==2||width==4)&&((offset&3)+width<=4));
     if(m->fault==CONTAINMENT_FAIL&&m->transactions&&offset==4)return false;
     if(m->log_closed&&m->fault==FINAL_ID_DRIFT&&offset==0){*value=0x275710de;return true;}
     if(m->log_closed&&m->fault==FINAL_BAR_DRIFT&&offset==0x10){*value=0x60000000;return true;}
@@ -116,7 +126,7 @@ static bool read_config(void *v,unsigned offset,unsigned width,uint32_t *value) 
     return true;
 }
 static bool write_config(void *v,unsigned offset,unsigned width,uint32_t value) {
-    Mock *m=v;touch(m);CHECK(offset<256&&(width==1||width==2||width==4)&&((offset&3)+width<=4));
+    Mock *m=v;touch(m);m->config_writes++;CHECK(offset<256&&(width==1||width==2||width==4)&&((offset&3)+width<=4));
     if(offset==MSI_PCIE+8&&width==2&&(value&0x8000)) {
         CHECK(!(m->config[1]&4));m->flr_written=true;m->flr_at=m->clock;
         m->config[1]&=~7u;
@@ -138,13 +148,13 @@ static void stall(void *v,unsigned usec){reentry_probe();Mock *m=v;m->clock+=use
 static bool read_mmio(void *v,uint32_t offset,uint32_t *value) {
     Mock *m=v;touch(m);m->mmio_reads++;CHECK(m->transactions==1);
     switch(offset) {
-        case 0:*value=MSI_CHIP;break;
-        case 0x110100:*value=m->fault==POST_HALT_FAIL?0xbadf0000:0x10;break;
-        case 0x1fa828:*value=0;break;
-        case 0x82381c:*value=m->fault==POST_SELECTOR_FAIL&&m->flr_written?0:MSI_FULL_SS0;break;
-        case 0x823820:*value=m->log_closed&&m->fault==FINAL_MMIO_FAIL?0:8;break;
-        case 0x823818:*value=0;break;
-        case 0x823804:*value=0xffffffff;break;
+        case 0:*value=m->safety_regs[0];break;
+        case 0x110100:*value=m->fault==POST_HALT_FAIL?0xbadf0000:m->engine_running?0:m->safety_regs[1];break;
+        case 0x1fa828:*value=m->safety_regs[2];break;
+        case 0x82381c:*value=m->fault==POST_SELECTOR_FAIL&&m->flr_written?0:m->safety_regs[3];break;
+        case 0x823820:*value=m->log_closed&&m->fault==FINAL_MMIO_FAIL?0:m->safety_regs[4];break;
+        case 0x823818:*value=m->safety_regs[5];break;
+        case 0x823804:*value=m->safety_regs[6];break;
         case 0x1fa7c4:*value=0xffffffff;break;
         case 0x1fa7cc:*value=0xfffff0ff;break;
         case 0x840100:*value=m->fault==PRE_SEC2_INACCESSIBLE?0xbadf5620:0x10;break;
@@ -152,18 +162,59 @@ static bool read_mmio(void *v,uint32_t offset,uint32_t *value) {
     }
     return true;
 }
-static bool release_dma(void *v){reentry_probe();Mock *m=v;CHECK(m->flr_written&&m->restored_bars==6);if(m->fault==DMA_FREE_FAIL)return false;m->freed++;return true;}
-static bool close_claim(void *v){reentry_probe();Mock *m=v;CHECK(m->freed==1&&m->graph.exclusive);m->graph.exclusive=false;return m->fault!=CLOSE_CLAIM_FAIL;}
+static bool guard_current(Mock *m,const MsiGuard *g) {
+    return g&&g->epoch&&m->guard_active&&!m->guard_broken&&
+        m->guard_epoch==g->epoch&&m->guard_purpose==g->purpose;
+}
+static bool atomic_safe(Mock *m,const MsiGuard *g,bool exclusive) {
+    /* No external calls between this validation and the modeled action. */
+    return guard_current(m,g)&&g->purpose==MSI_GUARD_FINAL&&
+        !memcmp(m->config,m->guard_reference,sizeof(m->config))&&
+        !(m->config[1]&4)&&m->flr_written&&m->clock-m->flr_at>=100000&&
+        !m->engine_running&&!memcmp(m->safety_regs,SafeRegisters,sizeof(SafeRegisters))&&
+        m->graph.identities_verified&&m->graph.console_alive&&
+        !m->graph.count&&m->graph.exclusive==exclusive&&
+        !memcmp(m->graph.boundary,m->guard_graph.boundary,32)&&
+        !memcmp(m->graph.console,m->guard_graph.console,32)&&
+        !memcmp(m->graph.logging,m->guard_graph.logging,32);
+}
+static bool begin_guard(void *v,unsigned purpose,const uint32_t *reference,MsiGuard *g) {
+    reentry_probe();Mock *m=v;
+    if(m->guard_active||!g||(purpose!=MSI_GUARD_FINAL&&purpose!=MSI_GUARD_STOCK)||
+       (purpose==MSI_GUARD_FINAL&&!reference))return false;
+    m->guard_active=true;m->guard_purpose=purpose;m->guard_epoch++;
+    if(reference)memcpy(m->guard_reference,reference,sizeof(m->guard_reference));
+    m->guard_graph=m->graph;
+    *g=(MsiGuard){m->guard_epoch,purpose};return true;
+}
+static bool guard_valid(void *v,const MsiGuard *g){reentry_probe();return guard_current(v,g);}
+static bool prepare_dma_release(void *v,const MsiGuard *g) {
+    reentry_probe();Mock *m=v;
+    if(m->dma_commit_spent)return false;
+    m->dma_commit_spent=true;
+    if(!atomic_safe(m,g,true)||m->fault==DMA_FREE_FAIL)return false;
+    CHECK(m->restored_bars==6&&!m->freed);m->dma_prepared=true;return true;
+}
+static bool prepare_claim_close(void *v){reentry_probe();Mock *m=v;CHECK(m->guard_active&&m->dma_prepared&&!m->freed&&m->graph.exclusive);m->claim_prepared=true;return m->fault!=CLOSE_CLAIM_FAIL;}
 static bool close_log(void *v){reentry_probe();Mock *m=v;CHECK(!m->log_closed);m->closes++;m->log_closed=true;return m->fault!=CLOSE_LOG_FAIL;}
-static void start_windows(void *v) {
+static void commit_windows(void *v,const MsiGuard *g,bool *dma_retained) {
     reentry_probe();
-    Mock *m=v;m->windows++;CHECK(m->log_closed);
-    if(m->stops)CHECK(m->stops==3&&m->flr_written&&m->freed==1&&!m->graph.exclusive);
-    if(m->fault!=RETURNED_WINDOWS)longjmp(Transfer,1);
+    Mock *m=v;
+    if(m->transfer_commit_spent)return;
+    m->transfer_commit_spent=true;
+    if(!guard_current(m,g)||!m->log_closed)return;
+    if(g->purpose==MSI_GUARD_FINAL) {
+        if(!atomic_safe(m,g,true)||m->freed||m->stops!=3||!m->dma_prepared||!m->claim_prepared||!dma_retained||!*dma_retained)return;
+    } else if(g->purpose!=MSI_GUARD_STOCK||m->stops||m->transactions)return;
+    /* Model one indivisible guarded commit. No callback or hook from here
+     * through resource release/claim close and transfer. */
+    if(g->purpose==MSI_GUARD_FINAL){m->freed=1;*dma_retained=false;m->graph.exclusive=false;}
+    m->windows++;
+    if(m->fault!=RETURNED_WINDOWS){m->guard_active=false;longjmp(Transfer,1);}
 }
 static MsiOps ops(void) {
     MsiOps o={&M,observe,snapshot,stage_windows,silence,disconnect,claim,restore_decode,transaction,
-              read_config,write_config,stall,read_mmio,release_dma,close_claim,close_log,start_windows};
+              read_config,write_config,stall,read_mmio,begin_guard,guard_valid,prepare_dma_release,prepare_claim_close,close_log,commit_windows};
     return o;
 }
 static void run(enum Fault fault,bool consent,const MsiQualification *q) {
@@ -256,10 +307,11 @@ static void ownership_tests(void) {
     now=base;now.exclusive=true;CHECK(!msi_graph_stage(&base,&now,0,false));
 }
 #include "regression_tests.h"
+#include "followup_regressions.h"
 int main(void) {
     FILE *f=fopen("build/prom.bin","rb");CHECK(f!=NULL);Prom=malloc(1048576);CHECK(Prom);
     CHECK(fread(Prom,1,1048576,f)==1048576&&fgetc(f)==EOF);fclose(f);
-    profile_tests();ownership_tests();workflow_tests();regression_tests();free(Prom);
+    profile_tests();ownership_tests();workflow_tests();regression_tests();followup_regressions();free(Prom);
     printf("PASS: %u host assertions, %u workflow scenarios.\n",Checks,Scenarios);
     puts("ROM/FWSEC profile, staged release, FLR quiet time/restore, DMA retention and Windows invocation: mocked only.");
     puts("No GPU access, firmware execution, payload or native UEFI backend; real candidate remains refused.");

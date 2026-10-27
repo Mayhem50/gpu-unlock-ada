@@ -5,7 +5,7 @@
 static bool ready_ops(const MsiOps *o) {
     return o&&o->observe&&o->snapshot&&o->stage_windows&&o->silence_console&&o->disconnect&&o->claim&&o->restore_decode&&
         o->transaction&&o->read_config&&o->write_config&&o->stall&&o->read_mmio&&
-        o->release_dma&&o->close_claim&&o->close_log&&o->start_windows;
+        o->begin_guard&&o->guard_valid&&o->prepare_dma_release&&o->prepare_claim_close&&o->close_log&&o->commit_windows;
 }
 static bool unchanged(const MsiOps *o,const MsiObservation *baseline) {
     MsiObservation now;
@@ -47,7 +47,7 @@ static bool payload_readbacks(const MsiOps *o) {
 }
 void msi_run(const MsiOps *o,MsiSession *s,const MsiObservation *observation,
              const uint8_t *prom,size_t bytes,const MsiQualification *q,bool consent) {
-    MsiGraph base;MsiProof proof={0};
+    MsiGraph base;MsiProof proof={0};MsiGuard guard={0};
     bool log_attempted=false;
     if(!s||s->state!=MSI_NEW)return; /* one attempt per session, no retry */
     s->state=MSI_ENTERED; /* Consume entry before the first external callback. */
@@ -63,15 +63,20 @@ void msi_run(const MsiOps *o,MsiSession *s,const MsiObservation *observation,
     if(!consent) {
         s->failed_stage=2;log_attempted=true;
         if(!o->close_log(o->context)){s->cleanup_failed=true;goto failed;}
-        s->state=MSI_WINDOWS_INVOKED;s->windows_calls=1;o->start_windows(o->context);
+        s->guard_attempted=s->guard_retained=true;
+        if(!o->begin_guard(o->context,MSI_GUARD_STOCK,NULL,&guard)||
+           !guard.epoch||guard.purpose!=MSI_GUARD_STOCK||!o->guard_valid(o->context,&guard))goto failed;
+        s->state=MSI_WINDOWS_INVOKED;s->windows_calls=1;o->commit_windows(o->context,&guard,&s->dma_retained);
         /* A returned StartImage is an error, including an EFI_SUCCESS return. */
-        s->state=MSI_STOPPED;return;
+        goto failed;
     }
     s->failed_stage=3;
     if(!q->ownership_reviewed||!q->console_callbacks_reviewed||!q->assets_verified||
        !msi_profile(observation,prom,bytes)||!unchanged(o,observation)||
        !o->snapshot(o->context,&base)||!msi_graph_stage(&base,&base,0,false))goto failed;
     s->failed_stage=4;
+    /* Even a failed silence may have changed console callbacks/state. */
+    s->console_may_be_changed=true;
     if(!o->silence_console(o->context))goto failed;
     for(unsigned stage=1;stage<=3;stage++) {
         s->failed_stage=4+stage;
@@ -88,25 +93,33 @@ void msi_run(const MsiOps *o,MsiSession *s,const MsiObservation *observation,
        !clear_master(o)||!msi_config_matches(o,reference.config)||
        !payload_readbacks(o)||!snapshot(o,&base,3,true))goto failed;
     s->failed_stage=10;
-    if(!clear_master(o)||!msi_reset(o,s,reference.config)||!snapshot(o,&base,3,true))goto failed;
+    if(!clear_master(o)||!msi_reset(o,s,reference.config))goto failed;
+    /* One lease spans proof, DMA cleanup, claim/log close and OS transfer.
+     * No unguard/reacquire window and no implicit release on any error. */
+    s->guard_attempted=s->guard_retained=true;
+    if(!o->begin_guard(o->context,MSI_GUARD_FINAL,reference.config,&guard)||
+       !guard.epoch||guard.purpose!=MSI_GUARD_FINAL||
+       !snapshot(o,&base,3,true)||!msi_post_reset(o,reference.config)||
+       !o->guard_valid(o->context,&guard))goto failed;
     s->failed_stage=11;
-    if(!o->release_dma(o->context))goto failed;
-    s->dma_retained=false;
+    if(!o->prepare_dma_release(o->context,&guard))goto failed;
     s->failed_stage=12;
-    if(!o->close_claim(o->context)||!snapshot(o,&base,3,false))goto failed;
-    s->state=MSI_CLEAN;s->failed_stage=13;log_attempted=true;
+    if(!o->guard_valid(o->context,&guard)||!o->prepare_claim_close(o->context)||
+       !snapshot(o,&base,3,true)||!o->guard_valid(o->context,&guard))goto failed;
+    s->state=MSI_READY_TO_COMMIT;s->failed_stage=13;log_attempted=true;
     if(!o->close_log(o->context)){s->cleanup_failed=true;goto failed;}
     s->failed_stage=14;
-    if(!snapshot(o,&base,3,false)||!msi_post_reset(o,reference.config))goto failed;
+    if(!snapshot(o,&base,3,true)||!msi_post_reset(o,reference.config)||
+       !o->guard_valid(o->context,&guard))goto failed;
     s->failed_stage=15;s->state=MSI_WINDOWS_INVOKED;s->windows_calls=1;
-    o->start_windows(o->context);
+    o->commit_windows(o->context,&guard,&s->dma_retained);
     /* Returning does not prove Windows, NVIDIA bind or display recovery. */
 failed:
     s->containment_verified=false;
-    if(s->mutated) {
+    if(s->mutated||s->console_may_be_changed||s->guard_attempted) {
         s->state=MSI_STOPPED;
         s->terminal_required=true;
-        (void)clear_master(o); /* Immediate best effort before remaining cleanup. */
+        if(s->mutated)(void)clear_master(o); /* No GPU access for console-only failure. */
     } else s->state=MSI_REFUSED;
     if(!log_attempted) {
         if(!o->close_log(o->context))s->cleanup_failed=true;

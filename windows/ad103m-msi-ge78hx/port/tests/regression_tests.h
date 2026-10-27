@@ -85,7 +85,8 @@ static void cleanup_regressions(void) {
         if(mode==2)M.fault=CLOSE_LOG_FAIL; /* Successful transaction, failing final close. */
         execute_regression(&o);
         CHECK(S.state==MSI_STOPPED&&S.terminal_required&&!M.windows&&M.closes==1);
-        if(mode<2)CHECK(S.dma_retained&&!M.freed&&!S.flrs);
+        CHECK(S.dma_retained&&!M.freed);
+        if(mode<2)CHECK(!S.flrs);
         if(mode==1)CHECK(!S.containment_verified&&(M.config[1]&4));
         else CHECK(S.containment_verified&&!(M.config[1]&4));
         if(mode==2)CHECK(S.cleanup_failed);

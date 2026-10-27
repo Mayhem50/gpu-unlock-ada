@@ -10,8 +10,9 @@ The four findings from the [offline review](../../../docs/windows-msi-ge78hx-off
 are corrected and covered by the normal regression suite. The remaining adapter
 contracts are still unresolved; this is not a qualification for hardware testing.
 The [follow-up review](../../../docs/windows-msi-ge78hx-offline-port-followup-review.md)
-reproduces remaining late-event and partial-console failures. These must be
-resolved before a native adapter; the normal passing suite does not cover them.
+identified late-event and partial-console failures, now covered by normal
+regressions and corrected in the host model. The exclusion/commit contract below
+still has no native implementation and does not qualify hardware testing.
 
 ## Reproduce the offline validation
 
@@ -47,7 +48,8 @@ without `MSI_OFFLINE_HOST` or with `GU_UEFI_PORT` enabled.
   owners or establish callback safety.
 - `src/session.c`: stage the future Windows image before mutation, detach
   TextOut then GraphicsConsole then NVIDIA, obtain exclusive ownership, check
-  a synthetic transaction result, reset, release DMA and hand off to Windows.
+  a synthetic transaction result and reset. Prepare cleanup without releasing
+  DMA or closing the claim, close the log, then validate and commit the transfer.
   Every operation uses an injected interface. Only RAM mocks implement it.
   Consume the session before staging, and privately copy the operations,
   qualification flags and preflight reference before any external callback.
@@ -77,9 +79,38 @@ quiescence. `terminal_required` forbids treating the host function's return as
 permission for a future EFI entry point to return. No terminal EFI mechanism is
 implemented here.
 
+### Guarded final operation (host model only)
+
+`begin_guard` acquires a lease with a purpose and nonzero epoch. A failed or
+partial acquisition is terminal. The lease spans the post-reset graph/proof,
+cleanup preparations, log close and final transfer; failures never release it
+implicitly. All intervening operations must respect that exclusion contract.
+This is not a native TPL implementation or a claim about firmware scheduling.
+
+`prepare_dma_release` and `prepare_claim_close` must not free/unmap buffers or
+close the exclusive claim. All ordinary callbacks therefore run while DMA is
+retained. `commit_windows` is the only operation allowed to release those
+resources and transfer control. In the CPU mock it revalidates epoch, complete
+config, quiescence/register state, ownership/boundary and preparation state at
+entry, then performs release, claim close and transfer without another callback
+between them. Earlier `guard_valid` results cannot authorize a stale commit.
+Attempts are spent before validation/effects; a retained lease permits no replay.
+
+On actual transfer the guard is consumed; on a return or failure it remains
+retained, and the remaining resources must stay retained. `dma_retained` may
+be cleared only after all mappings/buffers are safely released. A future native
+implementation must prove the required exclusion and safe internal operations
+or refuse the transfer. Merely connecting existing EFI callbacks or returning
+true from a guard function would not implement this contract.
+
+Console silence is marked as possibly mutated before calling it. Any later
+failure requires a terminal result even before the first GPU detach. This state
+is distinct from GPU mutation and does not trigger PCI/MMIO cleanup for a
+console-only failure. No automatic console rollback is claimed.
+
 ## Validation result — 2026-10-27
 
-The offline C suite passed **26,974 assertions across 76 workflow scenarios**.
+The offline C suite passed **109,139 assertions across 157 workflow scenarios**.
 Coverage includes both captures, profile/ROM mutations, missing/extra/duplicate
 owners, each partially failed detach, boundary/console/logging drift, exclusive
 claim failure, narrow decode restoration, invalid transaction proofs, inaccessible
@@ -92,6 +123,11 @@ mutated caller reference, silently incorrect restoration, late control/BME drift
 failed final containment and recursive entry across mock operations are covered.
 Session reuse and missing callbacks are rejected. These are CPU simulations;
 assertion counts include repeated access checks, not independent requirements.
+`tests/followup_regressions.h` integrates the F1/F2 reproductions: late config,
+register, engine, epoch and ownership changes during cleanup and commit;
+unavailable/partial/malformed leases; replay refusal; partial or falsely successful
+console silence. Rejected final operations retain all buffers and do not invoke
+Windows. No ordinary callback runs after actual release in the successful model.
 
 The diagnostic's unchanged CPU suites also passed (7,925 application checks and
 192 platform checks), along with 39 Python tests, pure PowerShell identity tests

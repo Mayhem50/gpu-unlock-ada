@@ -1,15 +1,17 @@
 # MSI offline port: review of corrections
 
 Reviewed revision: `c26b1c3`. Scope: source inspection and CPU mocks only.
-The four original corrections hold for their integrated regression cases.
-However, the core is not ready for direct translation into a native adapter:
-two remaining blocking findings have three reproducible unsafe outcomes under
-the late-event/partial-callback fault model already used by this project.
+The findings below describe that revision. Their three unsafe outcomes have now
+been converted to rejection regressions and corrected in the host model; see
+the remediation section. This still does not qualify direct translation into a
+native adapter: the exclusion/commit contract requires independent implementation
+and review, and no native implementation is supplied.
 
 These are software fault injections. They do not establish that this MSI
 firmware exhibits these behaviors or quantify a physical failure probability.
 No native code, GPU query, EFI execution, unlock, USB update, reboot or boot
-protection change was performed. This review changes no core behavior.
+protection change was performed. The original review changed no core behavior;
+the subsequent remediation changes only the host-only core and CPU tests.
 
 ## F1 — P1: safety evidence is not preserved until its use
 
@@ -80,7 +82,7 @@ recursive-entry tests validate reentry of `msi_run`; they do not establish
 asynchronous firmware exclusion. Successful reset mocks assume their own
 completion/register behavior and do not qualify stock no-unlock reset on the MSI.
 
-## Verification
+## Original review verification (historical)
 
 The normal port suite was rebuilt and passed **26,974 assertions / 76 scenarios**,
 including R1–R4 regressions and negative firmware compilation guards. All
@@ -90,22 +92,56 @@ passed again. Existing diagnostic EFI SHA256 is unchanged:
 The existing diagnostic CPU executables were also rerun: **7,925 application
 checks** and **192 platform checks** passed; neither executes EFI on the machine.
 
-`port/tests/review_followup.c` records the three reproductions separately from
-the normal suite. Its zero exit status means the unsafe fault-model outcomes
-were reproduced; it is not a passing safety qualification. Convert these probes
-to rejection regressions when fixing F1/F2.
+At review commit `3e69d8a`, `port/tests/review_followup.c` reproduced the three
+unsafe outcomes. It has now been removed and replaced with normal rejection
+regressions in `port/tests/followup_regressions.h`.
 
-Reproduce with CPU-only compilation from the repository root (PowerShell):
+## Host-only remediation of F1/F2
+
+- **F1:** acquire a purpose/epoch guard before the post-reset graph/proof and
+  retain it through cleanup preparation, log close and transfer. Missing guards,
+  partial acquisition and malformed leases refuse progress. Separate preparations
+  no longer free/unmap DMA or close the exclusive claim. No ordinary callback
+  therefore runs after actual resource release. The final compound
+  `commit_windows` action independently revalidates the lease, full config,
+  quiescence/register state, ownership/boundary and prepared resources, then
+  releases DMA, closes the claim and transfers with no intervening ordinary
+  callback. The host mock models this as an indivisible action. Revalidation
+  happens at commit, so earlier readbacks and a stale guard_valid result are
+  insufficient. Replay of a preparation or commit attempt is refused even
+  following failure. Rejected commits retain buffers and the lease.
+- **F2:** record `console_may_be_changed` before entering silence. A failure or
+  subsequent failed console check now returns `MSI_STOPPED` with
+  `terminal_required=true`, even without any GPU detach. GPU mutation remains
+  separately tracked; the console-only error path performs no PCI/MMIO cleanup.
+  There is no automatic, unverified rollback or ordinary-return permission.
+
+Only the CPU mock implements the atomic/exclusion contract. This is not an EFI
+adapter or a native TPL policy. A native implementation must establish that its
+internal cleanup/transfer operations respect the exclusion, track partial cleanup
+and preserve remaining resources on errors. It must refuse if that cannot be
+proved; adding a boolean guard around existing callbacks is insufficient.
+The real candidate remains unqualified, non-bootable and without any payload.
+
+Current validation: **109,139 assertions / 157 workflow scenarios**, including
+the former reproductions and late changes in every final MMIO callback, cleanup
+preparation/log close, and action entry. Tests include each safety register,
+config/BME, engine, epoch, boundary and exclusive ownership; failed/partial guard
+acquisition, invalid tokens, replay attempts and partial console silence. Assertion
+count includes repeated access checks, not independent safety requirements.
+Both negative firmware compilation guards, the unchanged diagnostic CPU suites
+(**7,925 application / 192 platform checks**), **39 Python tests**, pure
+PowerShell identity tests and PE/source checks pass. The diagnostic EFI hash
+above remains unchanged. All other previously documented native prerequisites,
+including DMA ledger/partial cleanup, timing failures and stock reset validation,
+still apply.
+
+Run the integrated CPU regressions from the repository root (PowerShell):
 
 ```powershell
 pwsh -NoProfile -File windows/ad103m-msi-ge78hx/port/Build-Offline.ps1
 if ($LASTEXITCODE -ne 0) { throw 'Baseline failed' }
-$followupCmd = Get-Content windows/ad103m-msi-ge78hx/port/build/compile.cmd -Raw
-$followupCmd = $followupCmd.Replace('tests\host_tests.c','tests\review_followup.c').Replace('msi-offline-tests.exe','review-followup.exe').Replace('build\validation.log','build\review-followup.log')
-Set-Content windows/ad103m-msi-ge78hx/port/build/compile-followup.cmd -Value $followupCmd -Encoding ascii
-& $env:ComSpec /d /c windows\ad103m-msi-ge78hx\port\build\compile-followup.cmd
-if ($LASTEXITCODE -ne 0) { throw 'Review probes failed' }
-Get-Content windows/ad103m-msi-ge78hx/port/build/review-followup.log -Tail 5
+python -m unittest discover -s windows/ad103m-msi-ge78hx/diagnostic/tests -p 'test_*.py'
 ```
 
 Only ignored host build outputs are generated. No adapter or bootable artifact

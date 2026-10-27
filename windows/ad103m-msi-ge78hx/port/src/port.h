@@ -50,6 +50,8 @@ typedef struct {
     bool ownership_reviewed,console_callbacks_reviewed,windows_image_reviewed;
     bool assets_verified;
 } MsiQualification;
+enum { MSI_GUARD_FINAL=1,MSI_GUARD_STOCK };
+typedef struct {uint64_t epoch;unsigned purpose;} MsiGuard;
 typedef struct {
     void *context;
     bool (*observe)(void *,MsiObservation *);
@@ -64,18 +66,34 @@ typedef struct {
     bool (*write_config)(void *,unsigned offset,unsigned width,uint32_t);
     void (*stall)(void *,unsigned microseconds);
     bool (*read_mmio)(void *,uint32_t offset,uint32_t *);
-    bool (*release_dma)(void *);
-    bool (*close_claim)(void *);
+    /* Host-only contract: exclude competing mutations until guarded transfer
+     * or terminal stop. A failed begin may be partial; never implicitly unlock.
+     * Atomic guarded actions MUST revalidate lease, fresh hardware/ownership
+     * and resource state at the action, not trust earlier caller readbacks.
+     * The release/transfer commit is spent before validation/effects, even on failure;
+     * a retained lease does not authorize replay of free or OS transfer.
+     * No native implementation or TPL policy is supplied by this prototype. */
+    bool (*begin_guard)(void *,unsigned purpose,const uint32_t reference[64],MsiGuard *);
+    bool (*guard_valid)(void *,const MsiGuard *);
+    /* Preparations must not free/unmap DMA or close the exclusive claim. */
+    bool (*prepare_dma_release)(void *,const MsiGuard *);
+    bool (*prepare_claim_close)(void *);
     bool (*close_log)(void *);
-    void (*start_windows)(void *); /* any return is failure, never success */
+    /* Last compound action: validate lease/state, release DMA, close claim,
+     * transfer. No ordinary external callback after actual resource release.
+     * Update dma_retained only when ALL buffers/mappings are safely released.
+     * Partial failure retains the guard and remaining resources. Any return
+     * is failure. This abstract action has ONLY a CPU mock implementation. */
+    void (*commit_windows)(void *,const MsiGuard *,bool *dma_retained);
 } MsiOps;
 enum MsiState {MSI_NEW,MSI_ENTERED,MSI_REFUSED,MSI_STAGED,MSI_RELEASED,MSI_TRANSACTION,
-               MSI_RESET,MSI_CLEAN,MSI_WINDOWS_INVOKED,MSI_STOPPED};
+               MSI_RESET,MSI_READY_TO_COMMIT,MSI_WINDOWS_INVOKED,MSI_STOPPED};
 typedef struct {
     enum MsiState state;
     bool mutated,started,claim_attempted,dma_retained,containment_verified;
     /* Host result only: never permission for an EFI entry point to return. */
     bool terminal_required,cleanup_failed;
+    bool console_may_be_changed,guard_attempted,guard_retained;
     unsigned stops,transactions,flrs,windows_calls;
     unsigned failed_stage;
 } MsiSession;

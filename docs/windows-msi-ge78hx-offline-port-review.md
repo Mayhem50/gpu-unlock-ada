@@ -82,7 +82,10 @@ without replacing the outer state or duplicating stage, close, reset or handoff.
 ## Adapter contracts still missing, distinct from the four reproduced bugs
 
 - **DMA lifetime and terminal stop:** `dma_live` is a transaction-supplied number
-  and `release_dma` returns one boolean. There is no ledger of buffer addresses,
+  and the original `release_dma` returned one boolean. The subsequent
+  [F1/F2 remediation](windows-msi-ge78hx-offline-port-followup-review.md) replaces
+  that release with a guarded compound commit, implemented only in CPU mocks.
+  There is still no native ledger of buffer addresses,
   sizes, mappings, partial allocation/unmap/free failures or pending PCI I/O
   attributes. The C orchestrator returns after mutation; a future EFI wrapper
   must explicitly prohibit ordinary entry-point return while resources remain
