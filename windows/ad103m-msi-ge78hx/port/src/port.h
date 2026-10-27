@@ -27,6 +27,7 @@ typedef struct {
     unsigned segment,bus,device,function;
 } MsiObservation;
 bool msi_profile(const MsiObservation *,const uint8_t *prom,size_t prom_bytes);
+bool msi_capabilities(const uint32_t config[64]);
 
 /* These are semantic identities validated by the capture/ownership adapter,
  * not numeric firmware handles. The native adapter is not implemented. */
@@ -68,17 +69,20 @@ typedef struct {
     bool (*close_log)(void *);
     void (*start_windows)(void *); /* any return is failure, never success */
 } MsiOps;
-enum MsiState {MSI_NEW,MSI_REFUSED,MSI_STAGED,MSI_RELEASED,MSI_TRANSACTION,
+enum MsiState {MSI_NEW,MSI_ENTERED,MSI_REFUSED,MSI_STAGED,MSI_RELEASED,MSI_TRANSACTION,
                MSI_RESET,MSI_CLEAN,MSI_WINDOWS_INVOKED,MSI_STOPPED};
 typedef struct {
     enum MsiState state;
     bool mutated,started,claim_attempted,dma_retained,containment_verified;
+    /* Host result only: never permission for an EFI entry point to return. */
+    bool terminal_required,cleanup_failed;
     unsigned stops,transactions,flrs,windows_calls;
     unsigned failed_stage;
 } MsiSession;
 bool msi_graph_stage(const MsiGraph *,const MsiGraph *,unsigned stage,bool exclusive);
-bool msi_reset(const MsiOps *,MsiSession *);
-bool msi_post_reset(const MsiOps *);
+bool msi_config_matches(const MsiOps *,const uint32_t reference[64]);
+bool msi_reset(const MsiOps *,MsiSession *,const uint32_t reference[64]);
+bool msi_post_reset(const MsiOps *,const uint32_t reference[64]);
 void msi_run(const MsiOps *,MsiSession *,const MsiObservation *,
              const uint8_t *,size_t,const MsiQualification *,bool consent);
 #endif

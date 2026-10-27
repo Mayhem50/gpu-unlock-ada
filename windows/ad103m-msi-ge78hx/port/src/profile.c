@@ -10,6 +10,19 @@ static bool digest(const uint8_t *bytes,size_t count,const char *expected) {
     for(size_t i=0;i<32;i++)if(hex[hash[i]>>4]!=expected[2*i]||hex[hash[i]&15]!=expected[2*i+1])return false;
     return true;
 }
+bool msi_capabilities(const uint32_t c[64]) {
+    /* Exact captured chain, including versions/layout and vendor-cap length.
+     * Four bounded steps; no guessed offsets or hidden extra capabilities. */
+    static const unsigned offsets[]={MSI_PM,MSI_MSI,MSI_PCIE,0xb4};
+    static const uint32_t headers[]={0x48036801,0x00807805,0x0012b410,0x01140009};
+    if(!c||((c[3]>>16)&255)!=0x80||!(c[1]&(1u<<20))||c[13]!=MSI_PM)return false;
+    unsigned next=c[13];
+    for(unsigned i=0;i<4;i++) {
+        if(next<0x40||next>0xfc||(next&3)||next!=offsets[i]||c[next/4]!=headers[i])return false;
+        next=(c[next/4]>>8)&255;
+    }
+    return next==0;
+}
 bool msi_profile(const MsiObservation *o,const uint8_t *prom,size_t bytes) {
     static const uint32_t stock[22]={
         MSI_CHIP,0x8b8f,0x3ff,0x10,0x1ffffe00,0,0x4cb8f,0x4cb8f,0xffffff0f,0xffffff8f,
@@ -20,7 +33,7 @@ bool msi_profile(const MsiObservation *o,const uint8_t *prom,size_t bytes) {
        o->config[0]!=MSI_ID||o->config[11]!=MSI_SUBSYSTEM||o->config[2]!=0x030000a1||
        (o->config[1]&7)!=3||(o->config[12]&1)||
        o->bar0_base!=0x5e000000ull||o->bar0_bytes!=0x1000000||
-       memcmp(o->config+4,bars,sizeof(bars)))return false;
+       memcmp(o->config+4,bars,sizeof(bars))||!msi_capabilities(o->config))return false;
     if((o->config[(MSI_PM+4)/4]&3)||((o->config[MSI_MSI/4]>>16)&1)||
        !(o->config[(MSI_PCIE+4)/4]&(1u<<28))||
        (o->config[(MSI_PCIE+8)/4]&0x8000))return false;

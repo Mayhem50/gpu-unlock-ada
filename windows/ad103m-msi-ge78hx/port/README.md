@@ -6,9 +6,9 @@ It has no native hardware adapter, EFI entry point, linked unlock payload,
 firmware installer or automatic reboot path. Building it does not access the GPU.
 The real candidate remains unqualified and refused.
 
-The [offline review](../../../docs/windows-msi-ge78hx-offline-port-review.md)
-reproduces four defects that the passing baseline suite misses. Resolve them
-and specify the remaining adapter contracts before preparing a native backend.
+The four findings from the [offline review](../../../docs/windows-msi-ge78hx-offline-port-review.md)
+are corrected and covered by the normal regression suite. The remaining adapter
+contracts are still unresolved; this is not a qualification for hardware testing.
 
 ## Reproduce the offline validation
 
@@ -36,6 +36,7 @@ without `MSI_OFFLINE_HOST` or with `GU_UEFI_PORT` enabled.
 
 - `src/profile.c`: validate actual ROM/FWSEC bytes and the narrowly captured
   PCI, BAR and register profile. Accept the two observed SS0 values only.
+  Validate the exact bounded PM/MSI/PCIe/vendor capability chain and header layout.
   Firmware signatures are located and hashed, not cryptographically verified.
 - `src/ownership.c`: match the five internal GPU/console ownership edges and
   verify each proposed detach stage. Preserve boundary, console and logging
@@ -45,10 +46,16 @@ without `MSI_OFFLINE_HOST` or with `GU_UEFI_PORT` enabled.
   TextOut then GraphicsConsole then NVIDIA, obtain exclusive ownership, check
   a synthetic transaction result, reset, release DMA and hand off to Windows.
   Every operation uses an injected interface. Only RAM mocks implement it.
+  Consume the session before staging, and privately copy the operations,
+  qualification flags and preflight reference before any external callback.
 - `src/reset.c`: bounded pending/readiness polling, one FLR attempt, at least
   100 ms without PCI/MMIO access even if the FLR write reports failure,
   restore pinned BARs with decoding disabled, leave bus mastering disabled,
   and validate post-reset state again immediately before handoff.
+  Never promote transaction-time configuration to a new reference. Reject
+  drift before post-transaction MMIO or FLR, and verify every restored config
+  DWORD before enabling decoding. Only the specific restoration registers are
+  written; status/W1C fields are compared, never replayed.
 
 The synthetic transaction callback models the contract needed by a later port;
 it does not implement or execute the unlock. Post-transaction SEC2 HALT must be
@@ -60,17 +67,37 @@ mastering. Unproven DMA allocations remain retained. There is no second attempt,
 automatic stock fallback or forced reset/power-off recovery. Containment itself
 can fail and is reported separately. A returned Windows start callback is always
 an error, including a nominal success return; it proves no operating-system boot.
+Failure containment is attempted immediately and checked again after log close,
+with no subsequent callback except the config reads/writes of that final check.
+`containment_verified` describes only that last observation, not permanent
+quiescence. `terminal_required` forbids treating the host function's return as
+permission for a future EFI entry point to return. No terminal EFI mechanism is
+implemented here.
 
 ## Validation result — 2026-10-27
 
-The offline C suite passed **5,789 assertions across 43 workflow scenarios**.
+The offline C suite passed **26,974 assertions across 76 workflow scenarios**.
 Coverage includes both captures, profile/ROM mutations, missing/extra/duplicate
 owners, each partially failed detach, boundary/console/logging drift, exclusive
 claim failure, narrow decode restoration, invalid transaction proofs, inaccessible
 post-transaction SEC2, pending/readiness timeouts, failed FLR write, mandatory
 quiet time, BAR restoration, late MSI/identity/BAR/register drift, DMA retention,
 cleanup failures, failed containment, skip and returned Windows handoff.
-Session reuse and missing callbacks are rejected. These are CPU simulations.
+The former counterexamples are now `tests/regression_tests.h`, included in the
+normal build: wrong capability IDs/pointers/versions, control and BAR drift,
+mutated caller reference, silently incorrect restoration, late control/BME drift,
+failed final containment and recursive entry across mock operations are covered.
+Session reuse and missing callbacks are rejected. These are CPU simulations;
+assertion counts include repeated access checks, not independent requirements.
+
+The diagnostic's unchanged CPU suites also passed (7,925 application checks and
+192 platform checks), along with 39 Python tests, pure PowerShell identity tests
+and read-only PE/source verification. The existing diagnostic EFI hash remains
+`18efed6c4a60ce0ae682fb9c9d165f425c280a2159e32f57124f8cf3c41703f9`.
+
+Configuration comparisons currently reject all drift, including status changes.
+Some real FLRs could clear status bits; that would be a conservative refusal.
+Any future exception needs separately reviewed semantics and regression tests.
 
 The real qualification fixture sets ownership, console callbacks, Windows image
 and assets review to false. Only tests use explicitly synthetic approval flags.

@@ -37,7 +37,8 @@ if($LASTEXITCODE -ne 0){Get-Content (Join-Path $PSScriptRoot 'build/validation.l
 Get-Content (Join-Path $PSScriptRoot 'build/validation.log') -Tail 4
 $hashes=[ordered]@{}
 Get-ChildItem (Join-Path $PSScriptRoot 'src') -File | Sort-Object Name | ForEach-Object {$hashes['src/'+$_.Name]=(Get-FileHash -LiteralPath $_.FullName).Hash}
-foreach($file in @('tests/host_tests.c','tools/prepare_fixtures.py','Build-Offline.ps1','build/captured_fixture.h','build/prom.bin')){$hashes[$file]=(Get-FileHash -LiteralPath (Join-Path $PSScriptRoot $file)).Hash}
+Get-ChildItem (Join-Path $PSScriptRoot 'tests') -File | Sort-Object Name | ForEach-Object {$hashes['tests/'+$_.Name]=(Get-FileHash -LiteralPath $_.FullName).Hash}
+foreach($file in @('tools/prepare_fixtures.py','Build-Offline.ps1','build/captured_fixture.h','build/prom.bin')){$hashes[$file]=(Get-FileHash -LiteralPath (Join-Path $PSScriptRoot $file)).Hash}
 $hashes['shared/vbios_610.c']=(Get-FileHash -LiteralPath (Join-Path $PSScriptRoot '../../ad104-msi/vendor/vbios_610.c')).Hash
 $hashes['shared/sha256-core.c']=(Get-FileHash -LiteralPath (Join-Path $PSScriptRoot '../diagnostic/src/core.c')).Hash
 [ordered]@{host_only=$true;bootable=$false;tests_passed=$true;firmware_build_guards_tested=$true;hardware_access=$false;native_backend=$false;payload_linked=$false;hardware_qualified=$false;source_sha256=$hashes;test_executable_sha256=(Get-FileHash (Join-Path $PSScriptRoot 'build/msi-offline-tests.exe')).Hash;utc=[DateTime]::UtcNow.ToString('o')} | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $PSScriptRoot 'build/manifest.json') -Encoding utf8

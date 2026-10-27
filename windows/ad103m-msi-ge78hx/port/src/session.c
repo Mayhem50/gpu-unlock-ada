@@ -50,13 +50,19 @@ void msi_run(const MsiOps *o,MsiSession *s,const MsiObservation *observation,
     MsiGraph base;MsiProof proof={0};
     bool log_attempted=false;
     if(!s||s->state!=MSI_NEW)return; /* one attempt per session, no retry */
+    s->state=MSI_ENTERED; /* Consume entry before the first external callback. */
     if(!ready_ops(o)||!q||!q->windows_image_reviewed){s->state=MSI_REFUSED;return;}
+    MsiOps private_ops=*o;MsiQualification private_q=*q;
+    MsiObservation reference;
+    if(consent&&!observation){s->state=MSI_REFUSED;return;}
+    if(consent)reference=*observation;
+    o=&private_ops;q=&private_q;observation=&reference;
     s->failed_stage=1;
     if(!o->stage_windows(o->context))goto failed;
     s->state=MSI_STAGED;
     if(!consent) {
         s->failed_stage=2;log_attempted=true;
-        if(!o->close_log(o->context))goto failed;
+        if(!o->close_log(o->context)){s->cleanup_failed=true;goto failed;}
         s->state=MSI_WINDOWS_INVOKED;s->windows_calls=1;o->start_windows(o->context);
         /* A returned StartImage is an error, including an EFI_SUCCESS return. */
         s->state=MSI_STOPPED;return;
@@ -79,25 +85,32 @@ void msi_run(const MsiOps *o,MsiSession *s,const MsiObservation *observation,
     s->state=MSI_TRANSACTION;s->failed_stage=9;s->started=true;s->dma_retained=true;s->transactions=1;
     if(!o->transaction(o->context,&proof)||!proof.completed||proof.marker!=MSI_MARKER||
        !proof.halted||!proof.permissions||!proof.selectors||!proof.dma_live||proof.dma_live>128||
+       !clear_master(o)||!msi_config_matches(o,reference.config)||
        !payload_readbacks(o)||!snapshot(o,&base,3,true))goto failed;
     s->failed_stage=10;
-    if(!clear_master(o)||!msi_reset(o,s)||!snapshot(o,&base,3,true))goto failed;
+    if(!clear_master(o)||!msi_reset(o,s,reference.config)||!snapshot(o,&base,3,true))goto failed;
     s->failed_stage=11;
     if(!o->release_dma(o->context))goto failed;
     s->dma_retained=false;
     s->failed_stage=12;
     if(!o->close_claim(o->context)||!snapshot(o,&base,3,false))goto failed;
     s->state=MSI_CLEAN;s->failed_stage=13;log_attempted=true;
-    if(!o->close_log(o->context))goto failed;
+    if(!o->close_log(o->context)){s->cleanup_failed=true;goto failed;}
     s->failed_stage=14;
-    if(!snapshot(o,&base,3,false)||!msi_post_reset(o))goto failed;
+    if(!snapshot(o,&base,3,false)||!msi_post_reset(o,reference.config))goto failed;
     s->failed_stage=15;s->state=MSI_WINDOWS_INVOKED;s->windows_calls=1;
     o->start_windows(o->context);
     /* Returning does not prove Windows, NVIDIA bind or display recovery. */
 failed:
+    s->containment_verified=false;
     if(s->mutated) {
-        s->containment_verified=clear_master(o);
         s->state=MSI_STOPPED;
+        s->terminal_required=true;
+        (void)clear_master(o); /* Immediate best effort before remaining cleanup. */
     } else s->state=MSI_REFUSED;
-    if(!log_attempted)(void)o->close_log(o->context);
+    if(!log_attempted) {
+        if(!o->close_log(o->context))s->cleanup_failed=true;
+    }
+    /* No external callback may follow this final containment proof. */
+    if(s->mutated)s->containment_verified=clear_master(o);
 }

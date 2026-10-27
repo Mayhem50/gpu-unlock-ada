@@ -1,10 +1,11 @@
 # MSI offline port review — 2026-10-27
 
-Reviewed implementation: `deb342e`, host-only capture-3/4 prototype. No native
-adapter should be prepared by directly translating its callbacks yet. Four
-counterexamples were reproduced on the CPU; no GPU query, EFI execution, USB
-update, unlock or boot-policy change was performed. This review changes no
-production behavior and fixes none of the findings below.
+Original reviewed implementation: `deb342e`, host-only capture-3/4 prototype.
+The four findings below describe that original revision; they have since been
+corrected in the offline core and converted to normal rejection/containment
+regressions. See the remediation section below. The remaining adapter contracts
+are still unresolved. No GPU query, EFI execution, USB update, unlock or
+boot-policy change was performed during review or correction.
 
 ## Reproduced findings
 
@@ -113,32 +114,69 @@ without replacing the outer state or duplicating stage, close, reset or handoff.
   native build evidence. Fixture hashes establish byte identity, not firmware
   signature acceptance or complete hardware qualification.
 
-## Executed verification and reproduction
+## Original verification and reproduction (historical)
 
 Baseline: **5,789 assertions, 43 workflow scenarios**, plus **39 Python tests**
 passed again. These passing tests coexist with all four reproduced defects.
 Assertion count includes repeated mock-access checks; it is not a count of
 independent safety requirements.
 
-`port/tests/review_counterexamples.c` deliberately asserts the current defective
-outcomes. It is excluded from the normal passing suite and must be replaced by
-rejection regressions when the defects are corrected. A zero exit status from
-this audit executable means the defects were reproduced, not that they are safe.
+At review commit `760026d`, `port/tests/review_counterexamples.c` deliberately
+asserted the defective outcomes. That file has now been removed and replaced
+by integrated rejection regressions in `port/tests/regression_tests.h`.
 
-To reproduce on the CPU from the repository root (PowerShell):
+## Remediation and current offline validation
+
+- **R1:** privately copy the preflight observation before the first callback;
+  compare all configuration DWORDs after disabling BME and before MMIO readback
+  or FLR. Reset copies this approved reference and refuses drift before its FLR
+  write. Verify the restored configuration with decode off, then again before
+  handoff. No status/W1C registers are replayed. Tests cover control/BAR drift,
+  mutations of the caller's copy and silent restoration failures. Invalid BAR
+  restoration never reaches the decode-enable write.
+- **R2:** invalidate the containment flag before failure cleanup, attempt prompt
+  BME clearing, close the log once, and establish the final containment evidence
+  after the last log callback. Late BME changes are cleared/read back; unreadable
+  final state leaves `containment_verified=false`. Failure after mutation always
+  sets `terminal_required=true`; unsafe DMA remains retained. Log-close errors
+  are recorded. The host function still returns a result to the test harness;
+  there is deliberately no native terminal policy or EFI adapter here.
+- **R3:** require the captured type-0/multifunction header, capability-list status,
+  initial pointer, four exact headers/layouts/versions and terminating pointer.
+  The chain walk is bounded and validates pointers before indexing. Regressions
+  mutate every bit of the four capability headers and initial pointer, plus the
+  PCI header/status. Unexpected capabilities, loops and ID changes are refused.
+- **R4:** consume `MSI_NEW` before any external callback. Copy callback operations
+  and qualification flags as well as the observation. Reentrant calls cannot
+  change the active session. Tests attempt nested entry across mock operations,
+  including successful flow, decode restoration, staging failure, transaction
+  failure, cleanup and skip-to-Windows.
+
+The full port suite now passes **26,974 assertions / 76 workflow scenarios**,
+including all converted regressions, and both negative host/UEFI compilation
+guards. The unchanged diagnostic CPU suites pass **7,925 application checks**
+and **192 platform checks**. **39 Python tests**, pure PowerShell identity tests
+and PE/source checks pass. Failed toolchain builds also invalidate a previous
+passing manifest. No diagnostic EFI rebuild is needed for these corrections.
+
+The existing diagnostic EFI SHA256 is unchanged:
+`18efed6c4a60ce0ae682fb9c9d165f425c280a2159e32f57124f8cf3c41703f9`.
+
+The reset reference comparison is deliberately strict, including status fields.
+A real FLR clearing status bits could cause refusal; no broader hardware
+admission is inferred from these tests. The adapter contracts listed earlier,
+especially DMA lifetime, terminal failure handling, asynchronous firmware
+callbacks, timing failures and stock reset postconditions, remain prerequisites.
+The candidate stays unqualified, non-bootable and without a payload/backend.
+
+To run the integrated regressions on the CPU from the repository root:
 
 ```powershell
 pwsh -NoProfile -File windows/ad103m-msi-ge78hx/port/Build-Offline.ps1
 if ($LASTEXITCODE -ne 0) { throw 'Baseline failed' }
-$reviewCmd = Get-Content windows/ad103m-msi-ge78hx/port/build/compile.cmd -Raw
-$reviewCmd = $reviewCmd.Replace('tests\host_tests.c','tests\review_counterexamples.c').Replace('msi-offline-tests.exe','review-counterexamples.exe').Replace('build\validation.log','build\review-counterexamples.log')
-Set-Content windows/ad103m-msi-ge78hx/port/build/compile-review.cmd -Value $reviewCmd -Encoding ascii
-& $env:ComSpec /d /c windows\ad103m-msi-ge78hx\port\build\compile-review.cmd
-if ($LASTEXITCODE -ne 0) { throw 'Counterexample run failed' }
-Get-Content windows/ad103m-msi-ge78hx/port/build/review-counterexamples.log -Tail 6
 python -m unittest discover -s windows/ad103m-msi-ge78hx/diagnostic/tests -p 'test_*.py'
 ```
 
-The generated review command keeps host-only compilation guards and does not
-update the normal validation manifest. All executables and ROM fixtures stay
-under ignored `port/build/`. No native backend or bootable artifact is produced.
+Regressions are included in the normal validation manifest, including the new
+test header hash. Executables and ROM fixtures stay under ignored `port/build/`.
+No native backend or bootable artifact is produced.
