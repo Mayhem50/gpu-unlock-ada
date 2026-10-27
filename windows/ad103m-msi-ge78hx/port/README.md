@@ -9,6 +9,9 @@ The real candidate remains unqualified and refused.
 The four findings from the [offline review](../../../docs/windows-msi-ge78hx-offline-port-review.md)
 are corrected and covered by the normal regression suite. The remaining adapter
 contracts are still unresolved; this is not a qualification for hardware testing.
+The [follow-up review](../../../docs/windows-msi-ge78hx-offline-port-followup-review.md)
+reproduces remaining late-event and partial-console failures. These must be
+resolved before a native adapter; the normal passing suite does not cover them.
 
 ## Reproduce the offline validation
 
