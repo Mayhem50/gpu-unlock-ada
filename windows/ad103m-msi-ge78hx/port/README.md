@@ -13,6 +13,10 @@ The [follow-up review](../../../docs/windows-msi-ge78hx-offline-port-followup-re
 identified late-event and partial-console failures, now covered by normal
 regressions and corrected in the host model. The exclusion/commit contract below
 still has no native implementation and does not qualify hardware testing.
+The [method alignment matrix](../../../docs/windows-msi-ge78hx-method-alignment.md)
+and [gate checklist](../../../docs/windows-msi-ge78hx-launch-checklist.md) record
+remaining parity gaps, especially single reset/unwind ownership, real firmware
+phases, FBPA accessibility sampling and pre-FLR effective-rate readout.
 
 ## Reproduce the offline validation
 

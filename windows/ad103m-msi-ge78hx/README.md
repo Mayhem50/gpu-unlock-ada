@@ -13,7 +13,8 @@ System BIOS: E17S1IMS.114
 
 The read-only EFI diagnostic is implemented and compiled under diagnostic/.
 There is no unlock payload, VBIOS image, installer or boot registration command.
-The probe writes logs only to its own USB source at a future approved launch.
+The probe writes logs only to its own USB source. Captures 3/4 were executed
+manually by the user; no new probe deployment or launch is part of current work.
 The [offline port prototype](port/README.md) models MSI release, reset and
 Windows handoff against CPU mocks derived from captures 3 and 4. It is not
 bootable and does not contain an executable unlock backend.
@@ -21,7 +22,9 @@ bootable and does not contain an executable unlock backend.
 ignored because captures can include proprietary firmware and machine-specific
 data.
 
-The only prepared launch is the host-only baseline collector:
+Current validation is CPU-only; use the port README for that build/test command.
+The host baseline collector below is a reference for a later authorized idle
+GPU session, and is not run as part of an offline review:
 
 ```powershell
 pwsh -NoProfile -File .\tools\windows-msi-ge78hx-readonly.ps1 -IncludeGpu -ConfirmGpuIdle
@@ -34,3 +37,5 @@ Boot, install a driver, flash a VBIOS, or perform GPU MMIO writes.
 See [the design](../../docs/windows-msi-ge78hx-ad103m-port-plan.md),
 [the launch checklist](../../docs/windows-msi-ge78hx-launch-checklist.md) and
 [the diagnostic build instructions](diagnostic/README.md).
+The [method alignment review](../../docs/windows-msi-ge78hx-method-alignment.md)
+maps the prototype to repository requirements and records open native gates.

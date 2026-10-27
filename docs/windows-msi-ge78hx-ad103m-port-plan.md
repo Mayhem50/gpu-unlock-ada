@@ -1,7 +1,13 @@
 # Windows port discovery: MSI Raider GE78HX 13VI / AD103M
 
-**Status: discovery only; no EFI payload is built, deployed, or run.** This
-document is a fail-closed porting plan for the exact local machine. It neither
+**Current status: read-only capture analysis and a host-only prototype; no native
+unlock adapter or EFI unlock payload is built, deployed, or run.** The user has
+executed diagnostic captures 3/4; that diagnostic history is separate from
+qualification of release, reset or unlock. Current work is repository/CPU-only.
+See the [current gate checklist](windows-msi-ge78hx-launch-checklist.md) and
+[repository-method alignment review](windows-msi-ge78hx-method-alignment.md).
+
+This document is a fail-closed porting plan for the exact local machine. It neither
 authorizes nor contains a VBIOS flash, boot-protection change, BCD/ESP write,
 driver patch, GPU-MMIO write, or experimental payload.
 
@@ -16,7 +22,7 @@ driver patch, GPU-MMIO write, or experimental payload.
 | System firmware | MSI `E17S1IMS.114`, released 2025-10-16 |
 | Firmware mode | UEFI |
 | Graphics topology | Intel UHD and NVIDIA display adapters are both present (hybrid ownership must be captured, not assumed) |
-| Security | VBS and its configured/running security service are active; a non-elevated query could not read Secure Boot or the BCD store |
+| Security at initial collection | VBS/security service reported active; that non-elevated query could not read Secure Boot or BCD. Later user-reported Secure Boot=false and BitLocker protection suspended; current state has not been re-queried |
 | Power observation | `nvidia-smi` reported a 155 W current limit, 150 W default limit and active `SW Power Cap`; no hardware or software thermal slowdown was active during sampling |
 
 The recorded values are observations, not an admission profile. In particular,
@@ -48,7 +54,7 @@ AD103 and AD103M share an Ada-family transaction lineage, not a board profile:
 | Firmware assets | Pinned AD102-family boot assets are shared in Linux experiments | Shared assets do not establish compatible PROM/FWSEC geometry, retention, or payload offsets |
 | Display/ownership | Desktop port captures a single NVIDIA GOP stack | Hybrid Intel/NVIDIA ownership may expose no NVIDIA GOP or a materially different protocol graph |
 | Power/reset | Desktop FLR and decode restoration are captured once | Laptop EC, Dynamic Boost, MUX and dGPU power-gating make FLR and warm-boot retention board-specific |
-| Windows execution | Existing EFI is unsigned and its manual guide asks for Secure Boot disabled | This contradicts the current no-protection-change constraint; no execution path is available yet |
+| Windows execution | AD104 EFI is unsigned; its guide uses Secure Boot disabled | User later changed policy for the diagnostic. A fresh trust/security/recovery review is needed for any future binary; no new protection change or launch is in scope |
 
 ## Issue #76 and the `2757` evidence
 
@@ -81,7 +87,7 @@ host-only collector (read-only)
                 |
                 +-- reject on any unknown or inconsistent field
                 v
-        transaction implementation (not started in this branch)
+        host-only orchestration (CPU mocks implemented; native transaction absent)
                 |  explicit one-shot consent, external observer, fail-close
                 |  release only captured consumers; bounded DMA and FLR
                 v
@@ -96,7 +102,17 @@ documentation. Build targets must distinguish `probe` (read-only capability)
 from `transaction` (write-capable), with the latter absent until the probe data
 has been reviewed. The dedicated diagnostic probe is now implemented in
 windows/ad103m-msi-ge78hx/diagnostic, compiled and exercised under CPU mocks.
-No hardware qualification or deployment has occurred.
+Diagnostic deployments/captures were subsequently performed by the user. No
+release/reset/unlock hardware qualification has occurred. The host prototype
+under windows/ad103m-msi-ge78hx/port models orchestration only; its transaction
+callback does not implement GFW/FWSEC/signature/selector phases.
+
+The reference's complete gpu_unlock_610_unlock owns reset and unwind. A future
+adapter must not connect that function to our callback and perform an outer FLR
+or cleanup again. The guarded compound commit is also a new mock-only abstraction,
+not a demonstrated native UEFI sequence. These integration decisions, missing
+FBPA accessibility sampling and pre-FLR effective-readout proof remain explicit
+open gates in the checklist.
 
 The repository's tools/read_sm_rates.py uses Linux RM ioctls and is not a
 Windows validator. A Windows rate-query implementation remains future work;
@@ -119,9 +135,11 @@ unless a separately verified rate query is available.
    establish FLR recovery; that remains a later, separately approved test.
    No values from AD104, `2757`,
    Clevo, Lenovo or Alienware are valid substitutes.
-5. Preserve a proven stock boot path without modifying default BootOrder, BCD,
-   the internal ESP or Secure Boot. A prospective EFI image must be verifiably
-   trusted by the existing policy; disabling Secure Boot is outside scope.
+5. Preserve a proven stock boot path without modifying default BootOrder, BCD
+   or the internal ESP. Re-establish the actual boot-security/recovery state
+   for the exact future image; do not treat prior user changes for the diagnostic
+   as approval for another policy change or payload. All such actions remain
+   outside the current CPU-only scope.
 6. Prepare a reproducible stock benchmark baseline, exact binary/source
    hashes, numerical comparators, telemetry and an external recovery observer.
 
