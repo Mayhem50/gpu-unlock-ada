@@ -175,6 +175,10 @@ handoff checks clean scoped lifecycle after log close and guard acquisition,
 then independently inside its final action. Dirty or unreadable state is terminal
 and retains uncertain resources/guard; stock failure adds no PCI/MMIO access or
 automatic cleanup. Native enforcement and actual recovery remain unqualified.
+The [review of F3/F4](../../../docs/windows-msi-ge78hx-f3-f4-review.md) confirms
+the reset gate cases but reproduces F5: invalid stock lease combined with dirty
+resources refuses handoff while incorrectly leaving dma_retained false. This
+combined-fault retention report is still open; no buffer is freed by the probe.
 
 The diagnostic's unchanged CPU suites also passed (7,925 application checks and
 192 platform checks), along with 39 Python tests, pure PowerShell identity tests

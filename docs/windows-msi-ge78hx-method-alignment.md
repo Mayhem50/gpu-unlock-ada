@@ -87,3 +87,8 @@ records F3/F4 and their integrated rejection regressions. Raw reset now uses a
 spent backend gate independent of counters, and stock commit revalidates clean
 scoped lifecycle at the action point. Both remain trusted host contracts,
 separate from native qualification.
+
+The [F3/F4 follow-up review](windows-msi-ge78hx-f3-f4-review.md) confirms the
+reset gate cases and records one remaining combined-fault gap (F5): an invalid
+stock lease can bypass resource-uncertainty reporting. Handoff/free remain
+refused, but V0 is partial until the retention flag is correct on all exits.

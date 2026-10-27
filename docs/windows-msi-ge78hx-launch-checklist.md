@@ -127,11 +127,13 @@ this MSI model validation. Their scenario counts are not MSI coverage.
 
 - [ ] **V1:** explicit stock/no-unlock mode and stock postconditions.
   Current synthetic unlocked-selector success flow is not this test.
-- [x] **V0 (host, F4 corrected):** clean scoped lifecycle checked after stock log
+- [ ] **V0 (host, F4 partial under combined faults):** clean scoped lifecycle checked after stock log
   close and guard acquisition/validation, and independently at stock commit.
   Dirty/unavailable state retains uncertain resources/guard and requires terminal
-  handling, with no GPU access or automatic cleanup. Stock recovery on hardware
-  remains V1–V4, not proved by a mock transfer.
+  handling for the single-fault cases. The [latest review](windows-msi-ge78hx-f3-f4-review.md)
+  reproduces F5: an invalid lease plus live/unknown resources skips the retention
+  flag update. Windows/free remain blocked, but resource uncertainty must be
+  recorded on all early exits. Stock recovery on hardware remains V1–V4.
 - [ ] **V2:** independently validate release-only, reset and stock Windows
   handoff in staged tests. Reset is a GPU mutation; none is authorized here.
 - [ ] **V3:** before future hardware trials: idle workloads, saved work, AC,
