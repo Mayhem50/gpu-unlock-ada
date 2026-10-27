@@ -115,6 +115,9 @@ FBPA accessibility and pre-FLR effective readout are now independently checked,
 with a repeated proof immediately before FLR. Real firmware phases, native
 lifecycle enforcement and the guarded compound commit remain open gates; none
 is qualified as a UEFI implementation by the host-only model.
+The [latest review](windows-msi-ge78hx-pre-flr-review.md) additionally reopens
+the raw single-use reset gate and final clean-lifecycle check on stock handoff;
+passing the normal CPU suite did not exclude these callback/event cases.
 
 The repository's tools/read_sm_rates.py uses Linux RM ioctls and is not a
 Windows validator. A Windows rate-query implementation remains future work;

@@ -167,6 +167,11 @@ A future native implementation must enforce the same gates before effects and
 maintain reliable bookkeeping; detecting a forbidden operation afterward cannot
 undo it. No such backend or real DMA-address ledger is supplied here.
 
+The [review of this change](../../../docs/windows-msi-ge78hx-pre-flr-review.md)
+reproduces two remaining gaps: raw FLR single-use enforcement within the reset
+phase, and final lifecycle validation on the stock/skip path. Normal regression
+passes do not cover these cases; the relevant checklist gates are open again.
+
 The diagnostic's unchanged CPU suites also passed (7,925 application checks and
 192 platform checks), along with 39 Python tests, pure PowerShell identity tests
 and read-only PE/source verification. The existing diagnostic EFI hash remains

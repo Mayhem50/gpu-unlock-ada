@@ -27,7 +27,7 @@ all future hazards are known or all gates passed.
 | Consumer/callback identity: AD104 msi_release.c | Five semantic edges; hashes do not resolve three boundary owners/callback identities | P2/P3 |
 | TextOut, GraphicsConsole, NVIDIA detach; exclusive claim; IO/MEM-only restore | Same modeled order, no code/global patches; native PCI I/O attributes absent | P3 |
 | Pinned five AD102 assets: firmware/README.md; AD104 profile.c/boot_io.c | PROM/FWSEC parsing only; no generated-asset/signature qualification | P5/T2 |
-| GFW/FWSEC/signature/boot/restore/selectors/reset/unwind: AD104 vendor/unlock_610.c | Typed retained pre-reset step; sole session scheduler, private reset and guarded cleanup. Full-core boundary refused; real firmware phases absent | T1 host complete; T2/T6/T7 open |
+| GFW/FWSEC/signature/boot/restore/selectors/reset/unwind: AD104 vendor/unlock_610.c | Typed retained pre-reset step; sole scheduler and private reset. Raw FLR replay inside the phase remains possible; complete core boundary refused | T1 reopened by F3; T2/T6/T7 open |
 | Four sampled PLMs, three required values: ad102_sample_permissions | All four sampled, FBPA accessibility only, independent PCI/chip proof and raw failure evidence | T3 host complete |
 | Effective readout at selectors/pre-FLR/post-FLR: ad102_readout | Pre-FLR check repeated just before FLR; existing post-FLR check retained. Actual selector writes unimplemented | T4 host readbacks complete; T2 open |
 | Pre-BME saved state; BME off; one FLR; quiet period; decode-off restore: AD104 port.c | Private reference, 100 ms quiet, strict compare before decode; pending budget 100 ms versus reference 1 s | T8 |
@@ -81,3 +81,8 @@ Current validation after remediation: 223 host scenarios / 164,445 assertions
 and 39 Python tests pass. Local documentation links and whitespace checks pass;
 the existing diagnostic EFI hash is unchanged. This does not include a rerun of
 the AD104 full core or Linux test-full suites and supplies no native MSI evidence.
+
+The [subsequent review](windows-msi-ge78hx-pre-flr-review.md) reproduces F3/F4
+despite those passes: raw reset authorization lacks single-use enforcement and
+the stock commit does not revalidate clean scoped lifecycle. These are open
+host-contract gaps, separate from native qualification.

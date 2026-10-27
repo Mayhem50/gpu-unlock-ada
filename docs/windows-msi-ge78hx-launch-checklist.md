@@ -85,11 +85,13 @@ this MSI model validation. Their scenario counts are not MSI coverage.
 
 ## 3. Repository transaction parity — before any adapter
 
-- [x] **T1 (host):** session owns lifecycle scheduling. A typed pre-reset-only
+- [ ] **T1 (host, reopened by F3):** session owns lifecycle scheduling. A typed pre-reset-only
   step must retain DMA and cannot own reset/unwind; the private helper owns one
   FLR/restore and guarded final commit alone performs cleanup. Unknown/full-core
-  boundaries, early operations, recursive/repeated reset and stale lifecycle
-  journals are refused. Native enforcement/ledger remains open under T6/T7.
+  boundaries and recursive/repeated private-helper entry are refused. Raw FLR
+  writes during the authorized reset phase still need a single-use gate before
+  effects: the journal detects a second write too late. See the
+  [latest review](windows-msi-ge78hx-pre-flr-review.md). Native enforcement remains T6/T7.
 - [ ] **T2:** model/test GFW, FWSEC/FRTS/signature-version/fuse selection,
   payload publication, SEC2 completion/HALT, stock-signature restoration and
   selector phases. Require both signature phases; no early metadata change or
@@ -124,6 +126,10 @@ this MSI model validation. Their scenario counts are not MSI coverage.
 
 - [ ] **V1:** explicit stock/no-unlock mode and stock postconditions.
   Current synthetic unlocked-selector success flow is not this test.
+- [ ] **V0 (F4):** revalidate clean scoped lifecycle after stock log close and
+  at stock commit itself. Current skip path can hand off with newly dirty
+  bookkeeping. Dirty/unavailable state must retain resources/guard, refuse
+  handoff and trigger no GPU access or automatic cleanup.
 - [ ] **V2:** independently validate release-only, reset and stock Windows
   handoff in staged tests. Reset is a GPU mutation; none is authorized here.
 - [ ] **V3:** before future hardware trials: idle workloads, saved work, AC,
