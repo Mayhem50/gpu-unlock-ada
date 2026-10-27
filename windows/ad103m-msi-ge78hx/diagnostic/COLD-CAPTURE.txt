@@ -1,0 +1,29 @@
+MSI GE78HX - SECONDE CAPTURE PROM APRES ARRET COMPLET
+Sonde 0.4.2, diagnostic uniquement. Aucun unlock inclus.
+
+Cette fiche ne lance aucune commande automatiquement.
+Conserver le meme mode dGPU, alimentation secteur, profil MSI et peripheriques
+que pour CAP0003. Ne pas changer le BIOS, le VBIOS ou le pilote.
+Verifier que la cle de recuperation BitLocker est accessible sur un autre
+appareil. Conserver les anciennes captures et leurs manifestes.
+
+1. Enregistrer le travail. Pour un arret complet Windows, sans /hybrid :
+   shutdown.exe /s /t 0
+2. Attendre l'extinction complete, puis environ 10 secondes.
+3. Rallumer et utiliser F11 au logo MSI. Choisir la Kingston en mode UEFI
+   uniquement pour cet essai volontaire. La sonde demarre directement.
+4. Laisser le rapport se sauvegarder. Retour au firmware apres 8 secondes.
+   Revenir sur Windows Boot Manager. Aucun nouvel essai automatique.
+5. Le prochain fichier devrait etre AD103M-PROBE/CAP0004.JSON.
+   Garder la cle branchee une fois dans Windows pour analyser ce rapport.
+
+Cet arret complet ne prouve pas une coupure electrique des rails du GPU.
+Documenter la sequence suivie; le rapport permettra de comparer les etats.
+Verifier PROM SHA-256, geometrie FWSEC, registres critiques et correspondance
+des BAR. Les variations de SS0 sont conservees, pas effacees ou normalisees.
+Les indices PCI 0/1/3/5 doivent etre associes aux indices UEFI 0/1/2/3.
+
+Ne pas laisser les protections suspendues apres la session : retirer cette
+cle, reactiver Secure Boot dans le BIOS, verifier True dans Windows, puis
+reprendre BitLocker et verifier Protection activee. Ne supprimer aucune cle
+Secure Boot et ne pas effacer le TPM.

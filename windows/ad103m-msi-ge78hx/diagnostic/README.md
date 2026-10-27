@@ -60,6 +60,13 @@ SampleProm then independently repeats its PCI/BAR/BME and chip checks.
 Transport errors, BADF at other registers, identity drift and failed final
 chip reads still block PROM sampling. No inaccessible register is treated as
 valid, and this classification never authorizes an unlock.
+
+Version 0.4.2 records config_slot/config_offset separately from uefi_index.
+For the MSI layout, config slots 0,1,3,5 map to logical protocol indices
+0,1,2,3. High DWORDs of 64-bit BARs are never queried as separate resources.
+Malformed/reserved encodings are reported without a GetBarAttributes call.
+The analyzer checks the mapping against captured config bytes. BAR0 remains
+logical index 0; MMIO/PROM access and their guards are unchanged.
 The report reserves 64 MiB to fit the bounded ROM, paths, code and graph data;
 a maximum-size ROM capture is exercised through the complete mocked entry
 point and validated offline.
@@ -68,5 +75,6 @@ Neither analyzer generates an admission profile or authorizes a transaction.
 
 Keep raw captures private: they contain proprietary ROM, loaded code and
 machine-specific details. No deployment or boot-registration script is
-provided. The compiled image is unsigned; its trust under the current Secure
-Boot policy remains unresolved. Do not change that policy to launch it.
+provided. The compiled image is unsigned. The operator disabled Secure Boot
+for the earlier diagnostic captures; this does not establish trust under an
+enabled Secure Boot policy or authorize a new launch automatically.

@@ -23,7 +23,13 @@ class ComparisonTests(unittest.TestCase):
         self.assertTrue(compare.compare(self.data,changed)['inventory_matches'])
     def test_bar_change_is_reported(self):
         changed = copy.deepcopy(self.data)
-        changed['display_devices'][0]['bars'][0]['base']='0x0000000090000000'
+        display=changed['display_devices'][0]
+        config=bytearray.fromhex(display['config64'])
+        config[16:20]=(0x90000000).to_bytes(4,'little')
+        display['config64']=config.hex()
+        bar=display['bars'][0]
+        bar.update(base='0x0000000090000000',raw='0x90000000')
+        bar['resource'].update(minimum='0x0000000090000000',maximum='0x0000000090ffffff')
         self.assertFalse(compare.compare(self.data,changed)['inventory_matches'])
     def test_revision_mismatch_rejected(self):
         changed = copy.deepcopy(self.data)

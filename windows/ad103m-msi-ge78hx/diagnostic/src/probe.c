@@ -73,15 +73,22 @@ static void VariablePath(TEXT *t,EFI_SYSTEM_TABLE *st,CHAR16 *name) {
         PathJson(t,buffer,length,multi);
     else TextPut(t,"null");TextPut(t,"}");
 }
-static void BarJson(TEXT *t,DISPLAY *d,UINTN index,EFI_BOOT_SERVICES *bs) {
+/* index is a configuration DWORD slot, not the protocol's logical BAR index.
+ * A 64-bit BAR consumes two config slots but one UEFI index. */
+static void BarJson(TEXT *t,DISPLAY *d,UINTN index,UINTN uefi_index,EFI_BOOT_SERVICES *bs) {
     UINT32 raw=Read32(d->config+16+index*4);UINT64 base,supports=0;VOID *resources=NULL;EFI_STATUS s;
     BOOLEAN is_io=(BOOLEAN)((raw&1)!=0),is64=(BOOLEAN)(!is_io&&(raw&6)==4);
+    BOOLEAN valid=(BOOLEAN)(is_io||((raw&6)==0)||(is64&&index<5));
     TextPut(t,"{\"index\":");TextDec(t,index);TextPut(t,",\"raw\":");TextHex(t,raw,8);
+    TextPut(t,",\"config_slot\":");TextDec(t,index);
+    TextPut(t,",\"config_offset\":");TextHex(t,16+index*4,2);
+    TextPut(t,",\"uefi_index\":");TextDec(t,uefi_index);
+    TextPut(t,",\"encoding_valid\":");Bool(t,valid);
     TextPut(t,",\"io\":");Bool(t,is_io);TextPut(t,",\"width64\":");Bool(t,is64);
     base=is_io?(raw&~(UINT64)3):(raw&~(UINT64)15);
     if(is64&&index<5) base|=(UINT64)Read32(d->config+20+index*4)<<32;
     TextPut(t,",\"base\":");TextHex(t,base,16);
-    s=d->pci->GetBarAttributes?d->pci->GetBarAttributes(d->pci,(UINT8)index,&supports,&resources):EFI_UNSUPPORTED;
+    s=valid&&d->pci->GetBarAttributes?d->pci->GetBarAttributes(d->pci,(UINT8)uefi_index,&supports,&resources):EFI_UNSUPPORTED;
     TextPut(t,",\"descriptor_status\":");Status(t,s);
     TextPut(t,",\"resource\":");
     if(!EFI_ERROR(s)&&resources) {
@@ -100,7 +107,7 @@ static void BarJson(TEXT *t,DISPLAY *d,UINTN index,EFI_BOOT_SERVICES *bs) {
     TextPut(t,"}");
 }
 static void DisplayJson(TEXT *t,DISPLAY *d,EFI_BOOT_SERVICES *bs) {
-    UINTN i;UINT8 hash[32];BOOLEAN target=(BOOLEAN)(Read16(d->config)==0x10de&&Read16(d->config+2)==0x2717);
+    UINTN i,uefi_index=0;UINT8 hash[32];BOOLEAN target=(BOOLEAN)(Read16(d->config)==0x10de&&Read16(d->config+2)==0x2717);
     TextPut(t,"{\"vendor\":");TextHex(t,Read16(d->config),4);
     TextPut(t,",\"device_id\":");TextHex(t,Read16(d->config+2),4);
     TextPut(t,",\"subsystem_vendor\":");TextHex(t,Read16(d->config+44),4);
@@ -118,7 +125,7 @@ static void DisplayJson(TEXT *t,DISPLAY *d,EFI_BOOT_SERVICES *bs) {
     TextPut(t,",\"bars\":[");
     if((d->config[14]&0x7f)==0) for(i=0;i<6;i++) {
         UINT32 raw=Read32(d->config+16+i*4);
-        if(i) TextPut(t,",");BarJson(t,d,i,bs);
+        if(uefi_index) TextPut(t,",");BarJson(t,d,i,uefi_index++,bs);
         if(!(raw&1)&&(raw&6)==4&&i<5) ++i;
     }
     TextPut(t,"],\"cached_efi_rom\":{\"size\":");TextDec(t,d->pci->RomSize);
@@ -237,7 +244,7 @@ EFI_STATUS EFIAPI UefiMain(EFI_HANDLE image,EFI_SYSTEM_TABLE *st) {
     DISPLAY *target=NULL;
     BOOLEAN prom_read_allowed=FALSE;
     if(!st||!st->BootServices||!st->RuntimeServices||RelocationAnchor!=Report) return EFI_INVALID_PARAMETER;
-    Message(st,L"MSI GE78HX AD103M diagnostic v0.4.1 - no GPU writes or unlock.\r\n");
+    Message(st,L"MSI GE78HX AD103M diagnostic v0.4.2 - no GPU writes or unlock.\r\n");
     s=OpenLog(image,st,&log,filename);
     if(EFI_ERROR(s)||!log) {Message(st,L"USB path not confirmed, or log unavailable. Returning to firmware.\r\n");return EFI_ERROR(s)?s:EFI_DEVICE_ERROR;}
     TextInit(&t,Report,sizeof(Report));

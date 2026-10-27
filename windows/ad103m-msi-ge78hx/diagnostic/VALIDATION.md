@@ -6,11 +6,11 @@ No PnP/CIM/NVML/CUDA collector, firmware program or GPU benchmark was run.
 
 Results:
 
-- C application mocks: 7,857 assertions passed. The EFI entry point runs
+- C application mocks: 7,925 assertions passed. The EFI entry point runs
   against mock protocols and in-memory PCI/PROM/register data.
 - C platform mocks: 192 assertions passed for loaded PE parsing and bounded
   protocol graph capture.
-- Python: 22 tests passed, covering PE rejection, capture mutation rejection,
+- Python: 25 tests passed, covering PE rejection, capture mutation rejection,
   driver digest validation, semantic graph comparison and unresolved graphs.
 - PowerShell: pure identity tests passed for the expected PCI/NVML strings,
   duplicate GPUs, wrong device/subsystem/revision, driver and VBIOS.
@@ -28,10 +28,17 @@ static source checks reject forbidden access call sites.
 Local artifact: build/AD103M-PROBE.EFI
 
 SHA-256:
-9a9a6b7c14653cac720f3a3bfd1f38c2936aad7ea8bf2bb2f50c5cc3ad961825
+18efed6c4a60ce0ae682fb9c9d165f425c280a2159e32f57124f8cf3c41703f9
 
 Regression coverage added after review:
 
+- Version 0.4.2 maps config DWORD slots to logical UEFI BAR indices.
+  CPU mocks cover all-32-bit, the captured MSI mixed layout, all-64-bit,
+  unimplemented BAR slots, a truncated trailing 64-bit BAR and reserved
+  memory encodings. Resource queries are checked against independent expected
+  logical indices and addresses. Python rejects missing/extra entries,
+  incorrect protocol indices, wrong high-DWORD assembly and inconsistent
+  metadata. No new GPU/PCI write operation was introduced.
 - MMIO transport failure, invalid chip, identity drift, final chip-read failure
   and BADF at required registers skip PROM sampling. The failed snapshot is
   still written for diagnosis.
@@ -60,8 +67,9 @@ local build/manifest.json. build/qualification.json records the distinction
 between successful host tests and unperformed hardware qualification.
 Build outputs and simulated captures are ignored by Git.
 
-This image is unsigned, undeployed and unexecuted in firmware. The exact
-machine's expected chip value, safe firmware read exposure, complete ROM/FWSEC
-availability, ownership topology and Secure Boot launch compatibility remain
-unverified. A diagnostic snapshot cannot qualify FLR recovery, establish iGPU
-recovery after a failed transaction, or prove unlock support.
+This version 0.4.2 image is unsigned and has not been executed in firmware
+during this validation. Earlier operator captures established AD103 identity
+and a complete parsable ROM chain/FWSEC in the sampled PROM window.
+This corrected BAR mapping still needs its own capture. Read-only snapshots
+cannot qualify FLR recovery, establish iGPU recovery after a failed transaction,
+or prove unlock support. Keep historical captures and their own manifests.

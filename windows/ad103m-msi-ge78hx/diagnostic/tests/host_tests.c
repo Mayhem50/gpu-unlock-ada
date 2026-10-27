@@ -34,6 +34,10 @@ static BOOLEAN FailMemory,CorruptResource,ChangeIdentity;
 static UINT32 Chip;
 static UINTN FailureRead;
 static BOOLEAN BadfValue,Sec2Badf;
+static BOOLEAN BarLayoutMode;
+static UINTN ExpectedBarCount,BarQueries;
+static UINT64 ExpectedBarBases[6];
+static UINT8 ExpectedBarTypes[6];
 
 static EFI_STATUS EFIAPI ConfigRead(EFI_PCI_IO_PROTOCOL *self,EFI_PCI_IO_PROTOCOL_WIDTH width,UINT32 off,UINTN count,VOID *out) {
     CHECK(width==EfiPciIoWidthUint32&&off==0&&(count==16||count==64));ConfigReads++;
@@ -68,6 +72,17 @@ static EFI_STATUS EFIAPI Bar(EFI_PCI_IO_PROTOCOL *self,UINT8 index,UINT64 *suppo
     UINT8 *p; (void)self;CHECK(index<6);BarReads++;*supports=0;
     p=calloc(1,46);CHECK(p!=NULL);p[0]=0x8a;p[1]=43;p[3]=0;p[17]=0x80;p[41]=1;
     p[22]=0xff;p[23]=0xff;p[24]=0xff;p[25]=0x80;
+    if(BarLayoutMode) {
+        UINT64 base,length;
+        CHECK(index==BarQueries&&BarQueries<ExpectedBarCount);BarQueries++;
+        base=ExpectedBarBases[index];length=ExpectedBarTypes[index]?128:0x1000000;
+        p[3]=ExpectedBarTypes[index];
+        for(UINTN k=0;k<8;k++) {
+            p[14+k]=(UINT8)(base>>(8*k));
+            p[22+k]=(UINT8)((base+length-1)>>(8*k));
+            p[38+k]=(UINT8)(length>>(8*k));
+        }
+    }
     if(CorruptResource) p[3]=1;
     *resources=p;return EFI_SUCCESS;
 }
@@ -158,6 +173,8 @@ static void Setup(unsigned scenario) {
     FailedConfig=FailedLocation=FailedLog=ShortWrite=FailedFlush=ExistingFirst=NonUsb=FALSE;
     MemoryReads=0;PromReads=0;FailMemory=CorruptResource=ChangeIdentity=FALSE;Chip=0x193000a1u;
     FailureRead=2;BadfValue=FALSE;Sec2Badf=FALSE;
+    BarLayoutMode=FALSE;BarQueries=ExpectedBarCount=0;
+    memset(ExpectedBarBases,0,sizeof(ExpectedBarBases));memset(ExpectedBarTypes,0,sizeof(ExpectedBarTypes));
     memset(MockProm,0,sizeof(MockProm));MockProm[0]=0xaa55;FailProm=FALSE;
 }
 static void TestCore(void) {
@@ -183,6 +200,47 @@ static void TestCore(void) {
     CHECK(RomPcirValid(Rom,512,0x10de,0x2717));Rom[0x50]=0;CHECK(!RomPcirValid(Rom,512,0x10de,0x2717));
     Rom[0x50]=1;Rom[0x55]=0;CHECK(!RomPcirValid(Rom,512,0x10de,0x2717));
     Rom[0x55]=0x80;Rom[0x18]=0xff;Rom[0x19]=0xff;CHECK(!RomPcirValid(Rom,512,0x10de,0x2717));
+}
+static void TestBarLayouts(void) {
+    static CHAR8 text[32768];TEXT t;DISPLAY d;unsigned layout;
+    const UINT32 raw[][6]={
+        {0x10000000,0x20000000,0x30000000,0x40000000,0x50000000,0x5001},
+        {0x5e000000,0xc,0x60,0xc,0x64,0x5001},
+        {0xc,1,0xc,2,0xc,3},
+        {0,0x20000000,0x30000000,0x40000000,0x50000000,0x5001}
+    };
+    const UINT64 bases[][6]={
+        {0x10000000,0x20000000,0x30000000,0x40000000,0x50000000,0x5000},
+        {0x5e000000,0x6000000000ull,0x6400000000ull,0x5000},
+        {0x100000000ull,0x200000000ull,0x300000000ull},
+        {0,0x20000000,0x30000000,0x40000000,0x50000000,0x5000}
+    };
+    const UINTN counts[]={6,4,3,6};
+    for(layout=0;layout<4;layout++) {
+        Setup(0);BarLayoutMode=TRUE;ExpectedBarCount=counts[layout];
+        memset(&d,0,sizeof(d));d.pci=&MockPci[0];memcpy(d.config,Config[0],64);
+        for(UINTN k=0;k<6;k++) {
+            UINT32 value=raw[layout][k];
+            for(UINTN b=0;b<4;b++)d.config[16+4*k+b]=(UINT8)(value>>(8*b));
+            ExpectedBarBases[k]=bases[layout][k];
+        }
+        if(layout!=2)ExpectedBarTypes[ExpectedBarCount-1]=1;
+        TextInit(&t,text,sizeof(text));DisplayJson(&t,&d,&Bs);
+        CHECK(!t.failed&&BarQueries==ExpectedBarCount&&MemoryReads==0);
+        if(layout==1) {
+            CHECK(strstr(text,"\"index\":3,\"raw\":\"0x0000000c\",\"config_slot\":3,\"config_offset\":\"0x1c\",\"uefi_index\":2"));
+            CHECK(strstr(text,"\"index\":5,\"raw\":\"0x00005001\",\"config_slot\":5,\"config_offset\":\"0x24\",\"uefi_index\":3"));
+            {FILE *f=fopen("build/bar-layout.json","wb");CHECK(f!=NULL);
+             CHECK(fwrite(text,1,strlen(text),f)==strlen(text));CHECK(fclose(f)==0);}
+        }
+    }
+    /* A 64-bit BAR starting in the last slot has no high DWORD. Never query it. */
+    Setup(0);memset(&d,0,sizeof(d));d.pci=&MockPci[0];d.config[36]=4;
+    TextInit(&t,text,sizeof(text));BarJson(&t,&d,5,5,&Bs);
+    CHECK(!t.failed&&BarReads==0&&strstr(text,"\"encoding_valid\":false"));
+    /* Reserved memory BAR encoding must not reach the UEFI resource query. */
+    d.config[16]=6;TextInit(&t,text,sizeof(text));BarJson(&t,&d,0,0,&Bs);
+    CHECK(BarReads==0&&strstr(text,"\"encoding_valid\":false"));
 }
 static void TestApplication(void) {
     unsigned scenario;
@@ -293,4 +351,4 @@ static void TestProm(void) {
     Setup(0);FailProm=TRUE;TextInit(&t,buffer,sizeof(buffer));
     CHECK(SampleProm(&t,&MockPci[0],&Bs)==4&&strstr(buffer,"\"hex\":null")&&strstr(buffer,"\"complete\":false"));
 }
-int main(void) {TestCore();TestApplication();TestSampler();TestProm();TestSec2Classification();printf("PASS: %u checks; full EFI application executed against host mocks; no GPU hardware accessed.\n",Checks);return 0;}
+int main(void) {TestCore();TestBarLayouts();TestApplication();TestSampler();TestProm();TestSec2Classification();printf("PASS: %u checks; full EFI application executed against host mocks; no GPU hardware accessed.\n",Checks);return 0;}

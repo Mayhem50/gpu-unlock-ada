@@ -6,8 +6,39 @@ import hashlib
 from pathlib import Path
 
 
+def validate_bar_layout(display):
+    config=bytes.fromhex(display.get('config64',''))
+    bars=display.get('bars')
+    if len(config)!=64 or not isinstance(bars,list):
+        raise ValueError('Missing BAR configuration snapshot')
+    slot=0;logical=0
+    while config[14]&0x7f==0 and slot<6:
+        if logical>=len(bars):
+            raise ValueError('Missing logical BAR entry')
+        bar=bars[logical]
+        raw=int.from_bytes(config[16+4*slot:20+4*slot],'little')
+        io=bool(raw&1);wide=not io and raw&6==4
+        valid=io or raw&6==0 or (wide and slot<5)
+        base=raw&(~3 if io else ~15)
+        if wide and slot<5:
+            base|=int.from_bytes(config[20+4*slot:24+4*slot],'little')<<32
+        for key,value in (('index',slot),('config_slot',slot),('uefi_index',logical)):
+            if type(bar.get(key)) is not int or bar[key]!=value:
+                raise ValueError('Incorrect BAR slot/logical index: '+key)
+        if (bar.get('config_offset')!=f'0x{16+slot*4:02x}' or bar.get('raw')!=f'0x{raw:08x}' or
+            bar.get('base')!=f'0x{base:016x}' or bar.get('io') is not io or
+            bar.get('width64') is not wide or bar.get('encoding_valid') is not valid):
+            raise ValueError('BAR metadata differs from config DWORDs')
+        if not valid and (bar.get('resource') is not None or bar.get('descriptor_status')=='0x0000000000000000'):
+            raise ValueError('Malformed BAR must not have a successful resource query')
+        slot+=2 if wide and slot<5 else 1
+        logical+=1
+    if len(bars)!=logical:
+        raise ValueError('Extra BAR entries or high DWORD treated as a BAR')
+
+
 def analyze(data, build_id):
-    if data.get('schema') != 4 or data.get('probe_version') not in ('0.4.0','0.4.1'):
+    if data.get('schema') != 4 or data.get('probe_version') not in ('0.4.0','0.4.1','0.4.2'):
         raise ValueError('Unsupported capture schema/version')
     if data.get('build_id') != build_id:
         raise ValueError('Capture build_id does not match the selected manifest')
@@ -17,6 +48,9 @@ def analyze(data, build_id):
     displays = data.get('display_devices')
     if not isinstance(displays, list) or len(displays) > 32:
         raise ValueError('Malformed display inventory')
+    if data.get('probe_version')=='0.4.2':
+        for display in displays:
+            validate_bar_layout(display)
     targets = [(i, d) for i, d in enumerate(displays)
                if d.get('vendor') == '0x10de' and d.get('device_id') == '0x2717']
     exact = [(i, d) for i, d in targets
@@ -54,7 +88,7 @@ def analyze(data, build_id):
         if sample.get('value') is not None and not re.fullmatch(r'0x[0-9a-f]{8}',sample['value']):
             raise ValueError('Malformed sampled register')
     result['register_classification']=snapshot.get('classification','legacy_or_unavailable')
-    if data.get('probe_version')=='0.4.1':
+    if data.get('probe_version') in ('0.4.1','0.4.2'):
         allowed=snapshot.get('prom_read_allowed',False)
         classification=snapshot.get('classification','blocked')
         if type(allowed) is not bool:
