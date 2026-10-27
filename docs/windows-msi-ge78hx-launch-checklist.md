@@ -20,7 +20,7 @@ absent: building one before private read-only capture data would be unsafe.
 After the GPU workload is idle, from the repository root:
 
 ```powershell
-pwsh -NoProfile -File .\tools\windows-msi-ge78hx-readonly.ps1
+pwsh -NoProfile -File .\tools\windows-msi-ge78hx-readonly.ps1 -IncludeGpu -ConfirmGpuIdle
 ```
 
 Expected identity: `10DE:2717`, `1462:13CD`, `A1`, VBIOS `95.03.2A.00.2A` and
@@ -38,24 +38,23 @@ topology. The following are hard stops:
 - dGPU-only display mode with no independently proven recovery display path;
 - current GPU workload, unsaved work, or no external observer/recovery plan.
 
-Only an explicit approval after this review can authorize work on a dedicated
-UEFI **read-only** probe. The existing AD104 probe is not launchable here: it
-is pinned to device `2782`, AD104 chip registers, a desktop GOP graph and a
-different ROM/FWSEC profile.
+Development and simulated tests of the dedicated read-only probe are complete.
+Its future execution and deployment still require explicit approval under the
+original request. The AD104 reference binary must never be used for this GPU.
 
-## Stage 3 — dedicated UEFI read-only probe (not yet built)
+## Stage 3 — dedicated UEFI read-only probe (built offline, not deployed)
 
-The future probe must be a new program under
-`windows/ad103m-msi-ge78hx/`, and must prove through source review and tests
-that it:
+The implementation is in windows/ad103m-msi-ge78hx/diagnostic. Its README
+contains the offline build and capture-analysis commands. Source inspection,
+host mocks and PE checks cover these properties:
 
 - reads PCI configuration, BAR description, bounded PROM/FWSEC descriptors,
   selected safe MMIO registers, GOP/console ownership and device paths only;
 - never enables BME or memory decode, writes MMIO, resets/FLRs the GPU,
   releases a UEFI driver, changes NVRAM/BCD/BootOrder/ESP, or loads a payload;
 - emits its capture only to a separately prepared removable medium; and
-- has an existing-policy trust/signing route. Do not disable Secure Boot as a
-  substitute for such a route.
+- requires an existing-policy trust route before launch. This route is still
+  unresolved: the built binary is unsigned. Keep Secure Boot unchanged.
 
 Two cold captures with matching hardware-critical fields are required. The raw
 captures remain private; only a reviewed, redacted profile digest may enter
@@ -70,7 +69,7 @@ and every mismatch. Any unknown field rejects before the GPU is claimed.
 
 ## Stage 5 — transaction design review (blocked on Stage 4)
 
-Only then review an isolated write-capable implementation. It must retain the
+Only then consider an isolated write-capable implementation. It must retain the
 stock boot path, require a new explicit approval, have no automatic retry and
 fail closed before driver handoff. No such implementation is present in this
 branch, and this checklist does not authorize creating or launching one.

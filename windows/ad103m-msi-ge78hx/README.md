@@ -11,20 +11,23 @@ VBIOS:     95.03.2A.00.2A
 System BIOS: E17S1IMS.114
 ```
 
-There is no EFI payload, VBIOS image, installer, boot registration command, or
-write-capable binary in this directory. `build/`, `local/`, and `captures/` are
+The read-only EFI diagnostic is implemented and compiled under diagnostic/.
+There is no unlock payload, VBIOS image, installer or boot registration command.
+The probe writes logs only to its own USB source at a future approved launch.
+`build/`, `local/`, and `captures/` are
 ignored because captures can include proprietary firmware and machine-specific
 data.
 
 The only prepared launch is the host-only baseline collector:
 
 ```powershell
-pwsh -NoProfile -File .\tools\windows-msi-ge78hx-readonly.ps1
+pwsh -NoProfile -File .\tools\windows-msi-ge78hx-readonly.ps1 -IncludeGpu -ConfirmGpuIdle
 ```
 
 Run it only once the active GPU workload is finished. It prints data only; it
 does not write a file, call EFI code, alter BCD/ESP/BootOrder, modify Secure
 Boot, install a driver, flash a VBIOS, or perform GPU MMIO writes.
 
-See `../../docs/windows-msi-ge78hx-ad103m-port-plan.md` for the design and
-`../../docs/windows-msi-ge78hx-launch-checklist.md` for the ordered gates.
+See [the design](../../docs/windows-msi-ge78hx-ad103m-port-plan.md),
+[the launch checklist](../../docs/windows-msi-ge78hx-launch-checklist.md) and
+[the diagnostic build instructions](diagnostic/README.md).

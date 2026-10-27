@@ -25,7 +25,10 @@ power, or VBIOS settings.
 
 Run `tools/windows-msi-ge78hx-readonly.ps1` to repeat the host-only
 collection. It prints to stdout and intentionally has no persistence or action
-switches.
+switches for persistence. NVML collection now requires both -IncludeGpu and
+-ConfirmGpuIdle; without them the driver/VBIOS check is explicitly incomplete.
+Identity mismatches, failed commands and unavailable security information
+return a failure exit code.
 
 ## Why the existing Windows port cannot be retargeted
 
@@ -69,12 +72,12 @@ host-only collector (read-only)
         |
         +-- hardware manifest + cold-baseline comparison
         |
-        +-- UEFI read-only capture, separately reviewed and signed/trusted
+        +-- UEFI read-only capture, reviewed and accepted by existing boot policy
                 |  PCI config / BAR geometry / ROM descriptor and FWSEC
                 |  GOP, Console, handle/protocol ownership graph
                 |  cold and warm retention snapshots (no MMIO writes)
                 v
-        strict `2717/1462:13CD/A1/VBIOS-hash/BIOS-hash` admission gate
+        strict `2717/1462:13CD/A1/VBIOS-hash/system-firmware-profile` admission gate
                 |
                 +-- reject on any unknown or inconsistent field
                 v
@@ -82,7 +85,7 @@ host-only collector (read-only)
                 |  explicit one-shot consent, external observer, fail-close
                 |  release only captured consumers; bounded DMA and FLR
                 v
-        unmodified NVIDIA Windows driver -> rate getter -> matched correctness/performance suite
+        unmodified NVIDIA Windows driver -> matched correctness/performance suite
 ```
 
 The new code should live beside, not inside, `windows/ad104-msi`, for example
@@ -91,19 +94,30 @@ The new code should live beside, not inside, `windows/ad104-msi`, for example
 having an independent `profile`, `ownership`, `boot I/O`, fixture set and
 documentation. Build targets must distinguish `probe` (read-only capability)
 from `transaction` (write-capable), with the latter absent until the probe data
-has been reviewed.
+has been reviewed. The dedicated diagnostic probe is now implemented in
+windows/ad103m-msi-ge78hx/diagnostic, compiled and exercised under CPU mocks.
+No hardware qualification or deployment has occurred.
+
+The repository's tools/read_sm_rates.py uses Linux RM ioctls and is not a
+Windows validator. A Windows rate-query implementation remains future work;
+Windows validation must use matched instruction/GEMM correctness and timing
+unless a separately verified rate query is available.
 
 ## Preconditions before any write-capable design review
 
 1. An elevated **read-only** collection must resolve the actual Secure Boot
    state and export the BCD/boot-manager *listing* without changing either.
-2. Obtain at least two complete cold UEFI captures, compare their digests, and
+2. Obtain at least two cold UEFI captures, compare normalized identity,
+   BAR descriptors, ROM/code digests and resolvable ownership relationships, and
    parse the local VBIOS/PROM and FWSEC metadata offline. Raw ROM, loaded
    Windows images, partition GUIDs and proprietary capture data stay private.
 3. Establish the Intel/NVIDIA GOP and protocol-owner graph for every capture;
-   a changed graph is a rejection, not a dynamic discovery opportunity.
+   compare semantic paths rather than enumeration IDs. Unknown or changed
+   ownership requires review; raw capture hashes need not match across boots.
 4. Establish dGPU power state, BME, BAR geometry, WPR2/selector/readout and
-   reset behaviour for cold and warm baselines. No values from AD104, `2757`,
+   retention across ordinary cold and warm stock boots. A read-only probe cannot
+   establish FLR recovery; that remains a later, separately approved test.
+   No values from AD104, `2757`,
    Clevo, Lenovo or Alienware are valid substitutes.
 5. Preserve a proven stock boot path without modifying default BootOrder, BCD,
    the internal ESP or Secure Boot. A prospective EFI image must be verifiably
@@ -111,7 +125,7 @@ has been reviewed.
 6. Prepare a reproducible stock benchmark baseline, exact binary/source
    hashes, numerical comparators, telemetry and an external recovery observer.
 
-## Validation ladder (all later stages require explicit approval)
+## Validation ladder
 
 1. Host-only read-only script: verify the identity and collect no files.
 2. Offline build/tests: host mocks, static PE checks and negative admission
@@ -120,13 +134,13 @@ has been reviewed.
 3. Trusted UEFI read-only probe: capture only after its source and deployment
    path are reviewed. Confirm that it makes no GPU writes, BCD writes, ESP
    changes or BootOrder changes.
-4. Profile review: compare two cold captures and reject any mismatch; add the
+4. Profile review: compare normalized cold captures and investigate changes; add the
    exact profile only after all expected fields are known.
 5. A separately approved, one-shot transaction can be considered only if a
    recovery path and boot-security policy remain intact. This step is expressly
    not prepared or executable by this branch.
 6. Post-transaction proof would require an unmodified NVIDIA driver handoff,
-   rate readback, deterministic numerical checks, matched stock/unlocked
+   an independently verified Windows rate query if available, numerical checks, matched stock/unlocked
    instruction and GEMM tests, telemetry, cold A/B/A and warm-reboot runs.
    Report no application-wide performance claim from microbenchmarks alone.
 

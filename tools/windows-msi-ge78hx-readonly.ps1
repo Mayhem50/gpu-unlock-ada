@@ -1,40 +1,47 @@
 [CmdletBinding()]
-param()
-
-$ErrorActionPreference = 'Continue'
-
-function Invoke-ReadOnlyCommand {
-    param([Parameter(Mandatory)][string]$Name, [Parameter(Mandatory)][scriptblock]$Command)
-    Write-Output "`n=== $Name ==="
-    try { & $Command } catch { Write-Warning $_.Exception.Message }
+param([switch]$IncludeGpu, [switch]$ConfirmGpuIdle)
+$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'windows-msi-ge78hx-identity.ps1')
+if ($IncludeGpu -and -not $ConfirmGpuIdle) {
+    throw 'NVML requires -ConfirmGpuIdle after the active workload has finished.'
 }
-
-# This collector deliberately has no output-file parameter and never calls an
-# EFI program, changes BCD, mounts the ESP, changes a driver, or writes GPU MMIO.
-Invoke-ReadOnlyCommand 'GPU identity and limits (NVML)' {
-    & nvidia-smi --query-gpu=name,pci.bus_id,pci.device_id,pci.sub_device_id,driver_version,vbios_version,power.limit,power.default_limit,pstate --format=csv,noheader
-    & nvidia-smi -q -d POWER,PERFORMANCE,TEMPERATURE,UTILIZATION
-}
-
-Invoke-ReadOnlyCommand 'Present NVIDIA PCI functions' {
-    Get-PnpDevice -PresentOnly |
-        Where-Object { $_.InstanceId -like 'PCI\VEN_10DE*' } |
-        Select-Object Status, Class, FriendlyName, InstanceId |
-        Format-List
-}
-
-Invoke-ReadOnlyCommand 'Platform firmware and Windows security state' {
-    Get-CimInstance Win32_ComputerSystem | Select-Object Manufacturer, Model | Format-List
-    Get-CimInstance Win32_BIOS | Select-Object Manufacturer, SMBIOSBIOSVersion, ReleaseDate | Format-List
+# Print only. No EFI execution, boot changes, driver installation or GPU writes.
+$failures = [System.Collections.Generic.List[string]]::new()
+try {
+    $devices = @(Get-PnpDevice -PresentOnly)
+    Assert-MsiGpuIdentity -InstanceIds @($devices.InstanceId)
+    $devices | Where-Object { $_.Class -eq 'Display' } |
+        Select-Object Status,Class,FriendlyName,InstanceId | Format-List
+} catch { $failures.Add("PCI identity: $($_.Exception.Message)") }
+if ($IncludeGpu) {
+    try {
+        $rows = @(& nvidia-smi --query-gpu=pci.bus_id,pci.device_id,pci.sub_device_id,driver_version,vbios_version --format=csv,noheader)
+        if ($LASTEXITCODE -ne 0) { throw "nvidia-smi failed: $LASTEXITCODE" }
+        Assert-MsiNvmlIdentity -Rows $rows
+        $rows
+        & nvidia-smi -q -d POWER,PERFORMANCE,TEMPERATURE,UTILIZATION
+        if ($LASTEXITCODE -ne 0) { throw "Telemetry failed: $LASTEXITCODE" }
+    } catch { $failures.Add("NVML: $($_.Exception.Message)") }
+} else { Write-Output 'NVML skipped; driver and VBIOS identity remain unverified.' }
+try {
+    $system = Get-CimInstance Win32_ComputerSystem
+    $bios = Get-CimInstance Win32_BIOS
+    $system | Select-Object Manufacturer,Model | Format-List
+    $bios | Select-Object Manufacturer,SMBIOSBIOSVersion,ReleaseDate | Format-List
+    if ($system.Model -notmatch 'Raider GE78\s*HX 13VI' -or $bios.SMBIOSBIOSVersion -ne 'E17S1IMS.114') {
+        throw 'System model or BIOS differs from the discovery baseline.'
+    }
     (Get-ComputerInfo -Property BiosFirmwareType).BiosFirmwareType
     Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard -ClassName Win32_DeviceGuard |
-        Select-Object VirtualizationBasedSecurityStatus, SecurityServicesConfigured,
-            SecurityServicesRunning, CodeIntegrityPolicyEnforcementStatus |
-        Format-List
-    try { Confirm-SecureBootUEFI } catch { "Secure Boot status unavailable: $($_.Exception.Message)" }
-}
-
-Invoke-ReadOnlyCommand 'Boot configuration access check' {
+        Select-Object VirtualizationBasedSecurityStatus,SecurityServicesConfigured,SecurityServicesRunning | Format-List
+    Write-Output "Secure Boot: $(Confirm-SecureBootUEFI)"
     & bcdedit /enum '{bootmgr}'
+    if ($LASTEXITCODE -ne 0) { throw "BCD listing failed: $LASTEXITCODE" }
+} catch { $failures.Add("Platform/security: $($_.Exception.Message)") }
+if ($failures.Count) {
+    $failures | ForEach-Object { Write-Warning $_ }
+    Write-Error 'Baseline incomplete or mismatched. No further stage is admitted.' -ErrorAction Continue
+    exit 1
 }
+Write-Output 'Host collection complete; this does not authorize EFI execution or establish unlock support.'
 
