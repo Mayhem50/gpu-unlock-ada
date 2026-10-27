@@ -14,6 +14,9 @@ System BIOS: E17S1IMS.114
 The read-only EFI diagnostic is implemented and compiled under diagnostic/.
 There is no unlock payload, VBIOS image, installer or boot registration command.
 The probe writes logs only to its own USB source at a future approved launch.
+The [offline port prototype](port/README.md) models MSI release, reset and
+Windows handoff against CPU mocks derived from captures 3 and 4. It is not
+bootable and does not contain an executable unlock backend.
 `build/`, `local/`, and `captures/` are
 ignored because captures can include proprietary firmware and machine-specific
 data.

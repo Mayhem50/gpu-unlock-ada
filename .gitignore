@@ -37,6 +37,7 @@ Module.symvers
 /windows/ad103m-msi-ge78hx/local/
 /windows/ad103m-msi-ge78hx/captures/
 /windows/ad103m-msi-ge78hx/diagnostic/build/
+/windows/ad103m-msi-ge78hx/port/build/
 *.EFI
 *.efi
 *.exe
