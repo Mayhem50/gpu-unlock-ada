@@ -6,11 +6,11 @@ No PnP/CIM/NVML/CUDA collector, firmware program or GPU benchmark was run.
 
 Results:
 
-- C application mocks: 5,551 assertions passed. The EFI entry point runs
+- C application mocks: 6,594 assertions passed. The EFI entry point runs
   against mock protocols and in-memory PCI/PROM/register data.
-- C platform mocks: 179 assertions passed for loaded PE parsing and bounded
+- C platform mocks: 192 assertions passed for loaded PE parsing and bounded
   protocol graph capture.
-- Python: 11 tests passed, covering PE rejection, capture mutation rejection,
+- Python: 19 tests passed, covering PE rejection, capture mutation rejection,
   driver digest validation, semantic graph comparison and unresolved graphs.
 - PowerShell: pure identity tests passed for the expected PCI/NVML strings,
   duplicate GPUs, wrong device/subsystem/revision, driver and VBIOS.
@@ -28,7 +28,24 @@ static source checks reject forbidden access call sites.
 Local artifact: build/AD103M-PROBE.EFI
 
 SHA-256:
-4768b7be6f62f6acaf619fd7d5f68473d788a73262cb5b38522c493505c5f2f3
+5dff6eee4c6ed68f33221785038877caa858b001284db8b0aba3ef1a5809e744
+
+Regression coverage added after review:
+
+- MMIO failure, invalid chip, identity drift, final chip-read failure and BADF
+  readout skip PROM sampling. Failed register capture also skips the extended
+  PCI-config read; the failed snapshot is still written for diagnosis.
+- A full application run with a 4 MiB cached ROM and 1 MiB PROM generates a
+  valid report above 10 MiB, then passes the Python capture validator.
+- The report buffer is 64 MiB to cover the bounded path/graph/code/ROM maxima;
+  file analyzers use the same 64 MiB capture ceiling. This reserves 64 MiB of
+  image data at a future firmware load.
+- GOP parents, console paths and console variables are compared semantically.
+  Display/handle enumeration reordering preserves matches; changed routes
+  fail comparison, while incomplete topology is reported as unknown.
+- Empty complete graphs, absent/out-of-range/boolean target references and
+  a graph target inconsistent with the PCI path are rejected. Console graph
+  roots must exist and are included in comparison.
 
 The source/build/header identity and artifact digest are recorded in the
 local build/manifest.json. build/qualification.json records the distinction

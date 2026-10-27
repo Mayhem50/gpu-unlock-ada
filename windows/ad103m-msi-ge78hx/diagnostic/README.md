@@ -45,6 +45,13 @@ Use --manifest to select the manifest for those exact captures. Build IDs,
 data lengths, target identity and supplied firmware/code digests are checked.
 Graph IDs are normalized by unique device paths. Unresolvable graph nodes and
 relocated driver code produce an unknown result, never a passing comparison.
+GOP parents, active console associations, console paths and ConIn/ConOut
+variables are compared separately as topology_matches. Array/handle ordering
+is normalized. Empty complete graphs or inconsistent target references are
+rejected. A failed register snapshot prevents further PROM sampling.
+The report reserves 64 MiB to fit the bounded ROM, paths, code and graph data;
+a maximum-size ROM capture is exercised through the complete mocked entry
+point and validated offline.
 Volatile selector/register samples remain available for separate review.
 Neither analyzer generates an admission profile or authorizes a transaction.
 

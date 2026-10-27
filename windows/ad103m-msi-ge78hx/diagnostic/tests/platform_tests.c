@@ -62,6 +62,7 @@ static void TestPe(void) {
 static void TestGraph(void) {
     static CHAR8 data[65536];TEXT t;EFI_BOOT_SERVICES bs;EFI_SYSTEM_TABLE st;
     memset(&bs,0,sizeof(bs));memset(&st,0,sizeof(st));st.BootServices=&bs;
+    st.ConsoleOutHandle=H(1);st.ConsoleInHandle=H(2);st.StandardErrorHandle=H(1);
     TextInit(&t,data,sizeof(data));SamplePlatform(&t,&st,H(1));CHECK(strstr(data,"\"available\":false"));
     SetupPe();memset(&Binding,0,sizeof(Binding));memset(&Image,0,sizeof(Image));
     Binding.DriverBindingHandle=Binding.ImageHandle=H(3);Binding.Version=0x6000b;
@@ -76,5 +77,8 @@ static void TestGraph(void) {
             CHECK(strstr(data,"\"release_authorized\":false"));
         } else CHECK(strstr(data,"\"complete\":false"));
     }
+    Mode=0;st.ConsoleInHandle=H(99);
+    TextInit(&t,data,sizeof(data));SamplePlatform(&t,&st,H(1));
+    CHECK(strstr(data,"\"complete\":false"));
 }
 int main(void){TestPe();TestGraph();printf("PASS: %u platform PE/ownership checks; read-only host mocks.\n",Checks);return 0;}

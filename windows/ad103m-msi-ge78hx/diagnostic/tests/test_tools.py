@@ -20,6 +20,12 @@ analyze=load('analyze')
 
 
 class ToolTests(unittest.TestCase):
+    def test_maximum_rom_capture_fits_and_validates(self):
+        data=json.loads((ROOT/'build/max-capture.json').read_text())
+        result=analyze.analyze(data,data['build_id'])
+        self.assertTrue(result['physical_prom_complete'])
+        self.assertEqual(len(data['cached_rom_hex']),8*1024*1024)
+        self.assertGreater((ROOT/'build/max-capture.json').stat().st_size,10*1024*1024)
     def test_pe_accepts_built_image(self):
         verify.validate_pe((ROOT/'build/AD103M-PROBE.EFI').read_bytes())
 

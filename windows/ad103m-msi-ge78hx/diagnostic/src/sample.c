@@ -52,11 +52,12 @@ static const CHAR8 *CaptureGuard(EFI_PCI_IO_PROTOCOL *pci,EFI_BOOT_SERVICES *bs,
     if(!ok) return "bar0_descriptor_mismatch";
     return NULL;
 }
-UINTN SampleRegisters(TEXT *t,EFI_PCI_IO_PROTOCOL *pci,EFI_BOOT_SERVICES *bs) {
+UINTN SampleRegisters(TEXT *t,EFI_PCI_IO_PROTOCOL *pci,EFI_BOOT_SERVICES *bs,BOOLEAN *result) {
     UINT32 words[16],after[16],values[22],last_chip=0;
     EFI_STATUS statuses[22],status;UINTN i,attempts=0,completed=0;
     UINT64 length=0x009a014c;BOOLEAN complete=TRUE,identity_stable=FALSE;
     const CHAR8 *reason=CaptureGuard(pci,bs,words);
+    if(result)*result=FALSE;
     if(reason) {Failure(t,reason);return 0;}
     TextPut(t,"{\"guard_passed\":true,\"minimum_validated_bar0_length\":");TextHex(t,length,16);
     TextPut(t,",\"samples\":[");
@@ -85,6 +86,7 @@ UINTN SampleRegisters(TEXT *t,EFI_PCI_IO_PROTOCOL *pci,EFI_BOOT_SERVICES *bs) {
     TextPut(t,",\"read_attempts\":");TextDec(t,attempts);
     TextPut(t,",\"complete\":");TextPut(t,complete?"true":"false");
     TextPut(t,",\"unlock_eligibility\":false}");
+    if(result)*result=(BOOLEAN)(complete&&!t->failed);
     return attempts;
 }
 

@@ -109,6 +109,10 @@ void SamplePlatform(TEXT *t,EFI_SYSTEM_TABLE *st,EFI_HANDLE target) {
         if(handles)bs->FreePool(handles);TextPut(t,",\"complete\":false}");return;
     }
     TextPut(t,",\"target\":");HandleId(t,handles,count,target);
+    if(Index(handles,count,target)==MAX_UINTN||
+       Index(handles,count,st->ConsoleOutHandle)==MAX_UINTN||
+       Index(handles,count,st->ConsoleInHandle)==MAX_UINTN||
+       Index(handles,count,st->StandardErrorHandle)==MAX_UINTN)complete=FALSE;
     TextPut(t,",\"conout\":");HandleId(t,handles,count,st->ConsoleOutHandle);
     TextPut(t,",\"conin\":");HandleId(t,handles,count,st->ConsoleInHandle);
     TextPut(t,",\"stderr\":");HandleId(t,handles,count,st->StandardErrorHandle);

@@ -23,7 +23,11 @@ static EFI_GUID LoadedGuid=EFI_LOADED_IMAGE_PROTOCOL_GUID;
 static EFI_GUID FsGuid=EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
 static EFI_GUID GopGuid=EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
 static EFI_GUID GlobalGuid={0x8be4df61,0x93ca,0x11d2,{0xaa,0x0d,0x00,0xe0,0x98,0x03,0x2b,0x8c}};
-static CHAR8 Report[8*1024*1024];
+/* Bounded worst case: 32 MiB path hex (4096 handles x 4096 bytes),
+ * 8 MiB cached ROM hex, 2 MiB PROM hex, 2 MiB loaded-code hex, plus
+ * bounded graph metadata. 64 MiB leaves room for all permitted inputs. */
+#define REPORT_CAPACITY (64u*1024u*1024u)
+static CHAR8 Report[REPORT_CAPACITY];
 /* Retain an absolute address fixup for relocatable PE/COFF firmware loading. */
 static CHAR8 * volatile RelocationAnchor=Report;
 typedef struct {
@@ -231,6 +235,7 @@ static void ConsolePath(TEXT *t,EFI_SYSTEM_TABLE *st,EFI_HANDLE h) {
 EFI_STATUS EFIAPI UefiMain(EFI_HANDLE image,EFI_SYSTEM_TABLE *st) {
     TEXT t;EFI_FILE_PROTOCOL *log=NULL;EFI_STATUS s,flush_status,close_status;UINTN size,mmio_attempts=0,index;CHAR16 filename[13];
     DISPLAY *target=NULL;
+    BOOLEAN registers_complete=FALSE;
     if(!st||!st->BootServices||!st->RuntimeServices||RelocationAnchor!=Report) return EFI_INVALID_PARAMETER;
     Message(st,L"MSI GE78HX AD103M diagnostic v0.4.0 - no GPU writes or unlock.\r\n");
     s=OpenLog(image,st,&log,filename);
@@ -251,13 +256,13 @@ EFI_STATUS EFIAPI UefiMain(EFI_HANDLE image,EFI_SYSTEM_TABLE *st) {
     if(EnumerationComplete&&TargetCount==1&&ExactCount==1)
         for(index=0;index<DisplayCount;index++) if(ExactTarget(Displays[index].config,64)) target=&Displays[index];
     TextPut(&t,",\"register_snapshot\":");
-    if(target) mmio_attempts=SampleRegisters(&t,target->pci,st->BootServices);
+    if(target) mmio_attempts=SampleRegisters(&t,target->pci,st->BootServices,&registers_complete);
     else TextPut(&t,"{\"guard_passed\":false,\"reason\":\"no_unique_target\",\"read_attempts\":0,\"complete\":false}");
     TextPut(&t,",\"physical_prom\":");
-    if(target) mmio_attempts+=SampleProm(&t,target->pci,st->BootServices);
-    else TextPut(&t,"{\"guard_passed\":false,\"reason\":\"no_unique_target\",\"read_attempts\":0,\"complete\":false}");
+    if(target&&registers_complete) mmio_attempts+=SampleProm(&t,target->pci,st->BootServices);
+    else TextPut(&t,"{\"guard_passed\":false,\"reason\":\"register_snapshot_unavailable\",\"read_attempts\":0,\"complete\":false}");
     TextPut(&t,",\"config256\":");
-    if(target) {
+    if(target&&registers_complete) {
         UINT32 extended[64];
         s=target->pci->Pci.Read(target->pci,EfiPciIoWidthUint32,0,64,extended);
         if(!EFI_ERROR(s)&&BytesEqual(extended,target->config,64)) TextBytes(&t,(UINT8 *)extended,sizeof(extended));

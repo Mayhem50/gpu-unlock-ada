@@ -74,6 +74,16 @@ def analyze(data, build_id):
                         raise ValueError('Invalid UEFI graph edge')
         if edge_count>4096 or edge_count!=platform.get('edge_count'):
             raise ValueError('Inconsistent UEFI edge count')
+        if platform.get('complete') is True:
+            if not handles:
+                raise ValueError('Empty graph cannot be complete')
+            for key in ('target','conout','conin','stderr'):
+                ref=platform.get(key)
+                if isinstance(ref,bool) or not isinstance(ref,int) or not 0<=ref<len(handles):
+                    raise ValueError('Missing or invalid complete graph reference: '+key)
+            expected_path=exact[0][1].get('path',{}).get('hex') if observed else None
+            if not expected_path or handles[platform['target']].get('path')!=expected_path:
+                raise ValueError('Graph target does not match the exact PCI device path')
         agents=platform.get('gpu_agents',[])
         if not isinstance(agents,list) or len(agents)>32:
             raise ValueError('Malformed driver inventory')
@@ -166,7 +176,7 @@ def main():
     for path in args.captures:
         if not args.mock and not re.fullmatch(r'CAP\d{4}\.JSON', path.name, flags=re.I):
             parser.error('Expected CAP0001.JSON-style firmware capture; use --mock only for simulated fixtures')
-        if path.stat().st_size > 8 * 1024 * 1024:
+        if path.stat().st_size > 64 * 1024 * 1024:
             parser.error('Capture exceeds the firmware report limit')
         try:
             result = analyze(json.loads(path.read_text(encoding='utf-8-sig')), manifest['build_id'])

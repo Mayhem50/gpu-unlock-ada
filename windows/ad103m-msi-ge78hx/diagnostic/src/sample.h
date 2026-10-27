@@ -4,6 +4,6 @@
 #include "core.h"
 #include <Protocol/PciIo.h>
 BOOLEAN ResourceMatches(const UINT8 *descriptor,UINT32 raw,UINT64 base,UINT64 *size);
-UINTN SampleRegisters(TEXT *text,EFI_PCI_IO_PROTOCOL *pci,EFI_BOOT_SERVICES *bs);
+UINTN SampleRegisters(TEXT *text,EFI_PCI_IO_PROTOCOL *pci,EFI_BOOT_SERVICES *bs,BOOLEAN *complete);
 UINTN SampleProm(TEXT *text,EFI_PCI_IO_PROTOCOL *pci,EFI_BOOT_SERVICES *bs);
 #endif

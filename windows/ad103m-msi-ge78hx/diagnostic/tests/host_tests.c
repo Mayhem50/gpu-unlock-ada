@@ -22,16 +22,18 @@ static EFI_SYSTEM_TABLE St;
 static EFI_LOADED_IMAGE_PROTOCOL Loaded;
 static EFI_SIMPLE_FILE_SYSTEM_PROTOCOL Fs;
 static EFI_FILE_PROTOCOL Root,Directory,Log,Existing;
-static UINT8 Config[2][256],Rom[150016];
+static UINT8 Config[2][256],Rom[PROBE_ROM_MAX];
 static UINT32 MockProm[0x100000/4];
 static BOOLEAN FailProm;
 static EFI_HANDLE Image=(EFI_HANDLE)(UINTN)100,Volume=(EFI_HANDLE)(UINTN)101;
 static unsigned Scenario,ConfigReads,BarReads,FileWrites,ExistingOpens,RootCloses,DirCloses,LogCloses;
 static char Written[sizeof(Report)];
 static BOOLEAN FailedConfig,FailedLocation,FailedLog,ShortWrite,FailedFlush,ExistingFirst,NonUsb;
-static UINTN MemoryReads;
+static UINTN MemoryReads,PromReads;
 static BOOLEAN FailMemory,CorruptResource,ChangeIdentity;
 static UINT32 Chip;
+static UINTN FailureRead;
+static BOOLEAN BadfValue;
 
 static EFI_STATUS EFIAPI ConfigRead(EFI_PCI_IO_PROTOCOL *self,EFI_PCI_IO_PROTOCOL_WIDTH width,UINT32 off,UINTN count,VOID *out) {
     CHECK(width==EfiPciIoWidthUint32&&off==0&&(count==16||count==64));ConfigReads++;
@@ -43,6 +45,7 @@ static EFI_STATUS EFIAPI MemoryRead(EFI_PCI_IO_PROTOCOL *self,EFI_PCI_IO_PROTOCO
     UINTN i;BOOLEAN found=FALSE;
     CHECK(self==&MockPci[0]&&width==EfiPciIoWidthUint32&&bar==0);
     if(offset>=0x300000&&offset<0x400000) {
+        PromReads++;
         CHECK((count==1||count==1024)&&offset+count*4<=0x400000&&!(offset&3));
         if(FailProm&&offset==0x301000) return EFI_DEVICE_ERROR;
         memcpy(out,(UINT8 *)MockProm+(offset-0x300000),count*4);return EFI_SUCCESS;
@@ -50,7 +53,8 @@ static EFI_STATUS EFIAPI MemoryRead(EFI_PCI_IO_PROTOCOL *self,EFI_PCI_IO_PROTOCO
     CHECK(count==1);
     for(i=0;i<sizeof(offsets)/sizeof(offsets[0]);i++) if(offset==offsets[i]) found=TRUE;
     CHECK(found);MemoryReads++;
-    if(FailMemory&&MemoryReads==2) return EFI_DEVICE_ERROR;
+    if(FailMemory&&MemoryReads==FailureRead) return EFI_DEVICE_ERROR;
+    if(BadfValue&&MemoryReads==2) {*(UINT32 *)out=0xbadf0000;return EFI_SUCCESS;}
     if(ChangeIdentity&&MemoryReads==1) Config[0][8]^=1;
     *(UINT32 *)out=offset==0?Chip:0;
     return EFI_SUCCESS;
@@ -141,7 +145,7 @@ static void Setup(unsigned scenario) {
     if(scenario==1) Config[0][46]^=1;
     if(scenario==3) Config[0][2]=0x05,Config[0][3]=0x27;
     for(i=0;i<2;i++) {MockPci[i].Pci.Read=ConfigRead;MockPci[i].GetLocation=Location;MockPci[i].GetBarAttributes=Bar;MockGop[i].Mode=&GopMode;}
-    MockPci[0].RomImage=Rom;MockPci[0].RomSize=sizeof(Rom);
+    MockPci[0].RomImage=Rom;MockPci[0].RomSize=150016;
     MockPci[0].Mem.Read=MemoryRead;
     GopMode.Info=&GopInfo;GopMode.SizeOfInfo=sizeof(GopInfo);GopInfo.HorizontalResolution=1920;GopInfo.VerticalResolution=1080;
     Bs.HandleProtocol=Handle;Bs.LocateHandleBuffer=Locate;Bs.FreePool=PoolFree;Bs.Stall=Stall;
@@ -151,7 +155,8 @@ static void Setup(unsigned scenario) {
     Log.Write=WriteLog;Log.Close=CloseFile;Log.Flush=FlushLog;Existing.Close=CloseFile;
     Scenario=scenario;ConfigReads=BarReads=FileWrites=ExistingOpens=RootCloses=DirCloses=LogCloses=0;
     FailedConfig=FailedLocation=FailedLog=ShortWrite=FailedFlush=ExistingFirst=NonUsb=FALSE;
-    MemoryReads=0;FailMemory=CorruptResource=ChangeIdentity=FALSE;Chip=0x193000a1u;
+    MemoryReads=0;PromReads=0;FailMemory=CorruptResource=ChangeIdentity=FALSE;Chip=0x193000a1u;
+    FailureRead=2;BadfValue=FALSE;
     memset(MockProm,0,sizeof(MockProm));MockProm[0]=0xaa55;FailProm=FALSE;
 }
 static void TestCore(void) {
@@ -199,35 +204,52 @@ static void TestApplication(void) {
     Setup(0);FailedFlush=TRUE;CHECK(UefiMain(Image,&St)==EFI_DEVICE_ERROR);CHECK(LogCloses==1);
     Setup(0);ExistingFirst=TRUE;CHECK(UefiMain(Image,&St)==EFI_SUCCESS);CHECK(ExistingOpens==2);
     CHECK(UefiMain(Image,NULL)==EFI_INVALID_PARAMETER);
+    Setup(0);FailMemory=TRUE;CHECK(UefiMain(Image,&St)==EFI_SUCCESS);
+    CHECK(MemoryReads==2&&PromReads==0&&strstr(Written,"register_snapshot_unavailable"));
+    CHECK(strstr(Written,"\"config256\":null")&&FileWrites==1);
+    Setup(0);FailMemory=TRUE;FailureRead=23;CHECK(UefiMain(Image,&St)==EFI_SUCCESS);
+    CHECK(MemoryReads==23&&PromReads==0&&strstr(Written,"register_snapshot_unavailable"));
+    Setup(0);BadfValue=TRUE;CHECK(UefiMain(Image,&St)==EFI_SUCCESS);
+    CHECK(MemoryReads==2&&PromReads==0&&strstr(Written,"register_snapshot_unavailable"));
+    Setup(0);ChangeIdentity=TRUE;CHECK(UefiMain(Image,&St)==EFI_SUCCESS);
+    CHECK(MemoryReads==22&&PromReads==0);
+    Setup(0);Chip=0x194000a1;CHECK(UefiMain(Image,&St)==EFI_SUCCESS);
+    CHECK(MemoryReads==1&&PromReads==0);
+    Setup(0);MockPci[0].RomSize=PROBE_ROM_MAX;
+    CHECK(UefiMain(Image,&St)==EFI_SUCCESS&&FileWrites==1);
+    CHECK(strlen(Written)>10u*1024u*1024u&&strlen(Written)<REPORT_CAPACITY);
+    CHECK(strstr(Written,"\"complete\":true")&&PromReads==257);
+    {FILE *f=fopen("build/max-capture.json","wb");CHECK(f!=NULL);
+     CHECK(fwrite(Written,1,strlen(Written),f)==strlen(Written));CHECK(fclose(f)==0);}
 }
 static void TestSampler(void) {
     CHAR8 buffer[8192];TEXT t;UINTN reads;
     Setup(0);Config[0][2]=0x57;TextInit(&t,buffer,sizeof(buffer));
-    CHECK(SampleRegisters(&t,&MockPci[0],&Bs)==0&&MemoryReads==0);
+    CHECK(SampleRegisters(&t,&MockPci[0],&Bs,NULL)==0&&MemoryReads==0);
     Setup(0);Config[0][2]=0x82;TextInit(&t,buffer,sizeof(buffer));
-    CHECK(SampleRegisters(&t,&MockPci[0],&Bs)==0&&MemoryReads==0);
+    CHECK(SampleRegisters(&t,&MockPci[0],&Bs,NULL)==0&&MemoryReads==0);
     Setup(0);Chip=0x194000a1;TextInit(&t,buffer,sizeof(buffer));
-    CHECK(SampleRegisters(&t,&MockPci[0],&Bs)==1&&MemoryReads==1&&strstr(buffer,"\"complete\":false"));
-    Setup(0);TextInit(&t,buffer,sizeof(buffer));reads=SampleRegisters(&t,&MockPci[0],&Bs);
+    CHECK(SampleRegisters(&t,&MockPci[0],&Bs,NULL)==1&&MemoryReads==1&&strstr(buffer,"\"complete\":false"));
+    Setup(0);TextInit(&t,buffer,sizeof(buffer));reads=SampleRegisters(&t,&MockPci[0],&Bs,NULL);
     CHECK(reads==23&&MemoryReads==23&&strstr(buffer,"\"complete\":true"));
     Setup(0);Config[0][4]=7;TextInit(&t,buffer,sizeof(buffer));
-    CHECK(SampleRegisters(&t,&MockPci[0],&Bs)==0&&MemoryReads==0);
+    CHECK(SampleRegisters(&t,&MockPci[0],&Bs,NULL)==0&&MemoryReads==0);
     Setup(0);Config[0][4]=1;TextInit(&t,buffer,sizeof(buffer));
-    CHECK(SampleRegisters(&t,&MockPci[0],&Bs)==0&&MemoryReads==0);
+    CHECK(SampleRegisters(&t,&MockPci[0],&Bs,NULL)==0&&MemoryReads==0);
     Setup(0);Config[0][19]=0x90;TextInit(&t,buffer,sizeof(buffer));
-    CHECK(SampleRegisters(&t,&MockPci[0],&Bs)==0&&MemoryReads==0);
+    CHECK(SampleRegisters(&t,&MockPci[0],&Bs,NULL)==0&&MemoryReads==0);
     Setup(0);CorruptResource=TRUE;TextInit(&t,buffer,sizeof(buffer));
-    CHECK(SampleRegisters(&t,&MockPci[0],&Bs)==0&&MemoryReads==0);
+    CHECK(SampleRegisters(&t,&MockPci[0],&Bs,NULL)==0&&MemoryReads==0);
     Setup(0);FailedLocation=TRUE;TextInit(&t,buffer,sizeof(buffer));
-    CHECK(SampleRegisters(&t,&MockPci[0],&Bs)==0&&MemoryReads==0);
+    CHECK(SampleRegisters(&t,&MockPci[0],&Bs,NULL)==0&&MemoryReads==0);
     Setup(0);Config[0][46]^=1;TextInit(&t,buffer,sizeof(buffer));
-    CHECK(SampleRegisters(&t,&MockPci[0],&Bs)==0&&MemoryReads==0);
+    CHECK(SampleRegisters(&t,&MockPci[0],&Bs,NULL)==0&&MemoryReads==0);
     Setup(0);FailMemory=TRUE;TextInit(&t,buffer,sizeof(buffer));
-    CHECK(SampleRegisters(&t,&MockPci[0],&Bs)==2&&MemoryReads==2&&strstr(buffer,"\"complete\":false"));
+    CHECK(SampleRegisters(&t,&MockPci[0],&Bs,NULL)==2&&MemoryReads==2&&strstr(buffer,"\"complete\":false"));
     Setup(0);ChangeIdentity=TRUE;TextInit(&t,buffer,sizeof(buffer));
-    CHECK(SampleRegisters(&t,&MockPci[0],&Bs)==22&&MemoryReads==22&&strstr(buffer,"\"pci_snapshot_unchanged\":false"));
+    CHECK(SampleRegisters(&t,&MockPci[0],&Bs,NULL)==22&&MemoryReads==22&&strstr(buffer,"\"pci_snapshot_unchanged\":false"));
     Setup(0);Config[0][8]=0xa2;TextInit(&t,buffer,sizeof(buffer));
-    CHECK(SampleRegisters(&t,&MockPci[0],&Bs)==0&&MemoryReads==0);
+    CHECK(SampleRegisters(&t,&MockPci[0],&Bs,NULL)==0&&MemoryReads==0);
 }
 static void TestProm(void) {
     static CHAR8 buffer[3*1024*1024];TEXT t;
