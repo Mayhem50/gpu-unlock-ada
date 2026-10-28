@@ -24,11 +24,11 @@ static bool duplicate_on_restore(void *v,unsigned offset,unsigned width,uint32_t
     if(M.flr_written&&!ResetInjected&&offset==0x24){ResetInjected=true;reject_duplicate_reset();}
     return write_config(v,offset,width,value);
 }
-static void duplicate_during_quiet(void *v,unsigned usec) {
+static bool duplicate_during_quiet(void *v,unsigned usec) {
     if(M.reset_gate.spent&&!ResetInjected&&M.clock-M.flr_at<100000) {
         ResetInjected=true;reject_duplicate_reset(); /* Rejected without even a virtual PCI access. */
     }
-    stall(v,usec);
+    return stall(v,usec);
 }
 static void raw_gate_regressions(void) {
     MsiResetGate gate={0};CHECK(!msi_reset_gate_take(NULL,true));

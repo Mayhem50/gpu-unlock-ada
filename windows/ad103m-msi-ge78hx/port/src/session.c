@@ -5,7 +5,7 @@
 static bool ready_ops(const MsiOps *o) {
     return o&&o->observe&&o->snapshot&&o->stage_windows&&o->silence_console&&o->disconnect&&o->claim&&o->restore_decode&&
         o->pre_reset.boundary==MSI_PRE_RESET_RETAINED_V1&&o->pre_reset.run&&o->lifecycle&&
-        o->read_config&&o->write_config&&o->stall&&o->read_mmio&&
+        o->read_config&&o->write_config&&o->stall&&o->clock_us&&o->read_mmio&&
         o->begin_guard&&o->guard_valid&&o->prepare_dma_release&&o->prepare_claim_close&&o->close_log&&o->commit_windows;
 }
 static bool unchanged(const MsiOps *o,const MsiObservation *baseline) {
@@ -43,7 +43,7 @@ void msi_run(const MsiOps *o,MsiSession *s,const MsiObservation *observation,
              const uint8_t *prom,size_t bytes,const MsiQualification *q,bool consent) {
     MsiGraph base;MsiProof proof={0};MsiGuard guard={0};
     bool log_attempted=false;
-    if(!s||s->state!=MSI_NEW)return; /* one attempt per session, no retry */
+    if(!s||s->state!=MSI_NEW||s->quiet_uncertain)return; /* no replay after uncertain reset */
     s->state=MSI_ENTERED; /* Consume entry before the first external callback. */
     if(!ready_ops(o)||!q||!q->windows_image_reviewed){s->state=MSI_REFUSED;return;}
     MsiOps private_ops=*o;MsiQualification private_q=*q;
@@ -120,6 +120,12 @@ void msi_run(const MsiOps *o,MsiSession *s,const MsiObservation *observation,
     /* Returning does not prove Windows, NVIDIA bind or display recovery. */
 failed:
     s->containment_verified=false;
+    if(s->quiet_uncertain) {
+        s->state=MSI_STOPPED;s->terminal_required=true;
+        /* No callback is safe here: the reset quiet interval is unproven.
+         * Native nonreturning RAM-only terminal handling is still absent. */
+        return;
+    }
     if(s->terminal_required||s->mutated||s->console_may_be_changed||s->guard_attempted||s->stock_cleanup_started) {
         s->state=MSI_STOPPED;
         s->terminal_required=true;

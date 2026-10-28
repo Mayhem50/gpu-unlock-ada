@@ -31,35 +31,59 @@ bool msi_lifecycle_expected(const MsiOps *o,unsigned resets,unsigned live_dma) {
         now.resets==resets&&now.restores==resets&&!now.unmaps&&!now.frees&&
         !now.claim_closes&&now.live_dma==live_dma;
 }
+static bool measured_delay(const MsiOps *o,unsigned usec,MsiDelayEvidence *e) {
+    *e=(MsiDelayEvidence){0};e->requested_us=usec;
+    bool before=o->clock_us(o->context,&e->before);
+    /* Even if the clock is unavailable, attempt the full requested delay.
+     * Never turn its return status into elapsed-time evidence. */
+    e->service_ok=o->stall(o->context,usec);
+    bool after=o->clock_us(o->context,&e->after);
+    e->clock_valid=before&&after&&e->after>=e->before;
+    return e->service_ok&&e->clock_valid&&e->after-e->before>=usec;
+}
 bool msi_reset_owned(const MsiOps *o,MsiSession *s,const uint32_t reference[64],unsigned live_dma) {
     uint32_t saved[64],v=0,command=0;
-    if(!o||!s||s->state!=MSI_RESET_READY||!reference||s->flrs||!s->started||!s->dma_retained||!msi_capabilities(reference))return false;
+    if(!o||!o->stall||!o->clock_us||!s||s->quiet_uncertain||s->state!=MSI_RESET_READY||!reference||s->flrs||!s->started||!s->dma_retained||!msi_capabilities(reference))return false;
     s->state=MSI_RESET_VERIFYING; /* Spend entry before any callback; no recursive owner entry. */
     /* Copy the preflight reference, never promote post-transaction state. */
     uint32_t approved[64];memcpy(approved,reference,sizeof(approved));
     for(unsigned i=0;i<64;i++)if(!o->read_config(o->context,i*4,4,&saved[i]))return false;
     if(memcmp(saved,approved,sizeof(saved))||saved[0]!=MSI_ID||saved[11]!=MSI_SUBSYSTEM||(saved[1]&4)||
        !(saved[(MSI_PCIE+4)/4]&(1u<<28))||(saved[(MSI_PCIE+8)/4]&0x8000))return false;
-    for(unsigned tries=0;;tries++) {
+    uint64_t begin=0,now=0;
+    MsiDelayEvidence poll;
+    if(!o->clock_us(o->context,&begin))return false;
+    for(;;) {
+        if(!o->clock_us(o->context,&now)||now<begin||now-begin>100000)return false;
         if(!o->read_config(o->context,MSI_PCIE+10,2,&v)||v==0xffff)return false;
+        if(!o->clock_us(o->context,&now)||now<begin||now-begin>100000)return false;
         if(!(v&32))break;
-        if(tries==100)return false;
-        o->stall(o->context,1000);
+        if(now-begin==100000)return false;
+        unsigned remaining=(unsigned)(100000-(now-begin));
+        if(!measured_delay(o,remaining<1000?remaining:1000,&poll))return false;
     }
     if(!config_matches(o,approved,false)||!msi_pre_flr_checks(o,approved,&s->pre_flr)||
        !msi_lifecycle_expected(o,0,live_dma))return false;
     s->flrs=1;s->state=MSI_RESET;
+    s->quiet_uncertain=true; /* any failed write may already have reset */
     bool wrote=o->write_config(o->context,MSI_PCIE+8,2,(saved[(MSI_PCIE+8)/4]&0xffff)|0x8000);
     /* Even a failed FLR write may have taken effect: always enforce quiet time. */
-    o->stall(o->context,100000);
-    if(!wrote)return false;
+    bool delayed=measured_delay(o,100000,&s->quiet);
+    s->quiet_uncertain=!s->quiet.clock_valid||s->quiet.after-s->quiet.before<100000;
+    if(!wrote||!delayed)return false;
     bool ready=false;
-    for(unsigned tries=0;tries<=100;tries++) {
-        if(o->read_config(o->context,0,4,&v)) {
+    begin=s->quiet.after;
+    for(;;) {
+        if(!o->clock_us(o->context,&now)||now<begin||now-begin>1000000)return false;
+        bool read=o->read_config(o->context,0,4,&v);
+        if(!o->clock_us(o->context,&now)||now<begin||now-begin>1000000)return false;
+        if(read) {
             if(v==MSI_ID){ready=true;break;}
             if(v!=0&&v!=0xffffffff)return false;
         }
-        if(tries<100)o->stall(o->context,10000);
+        if(now-begin==1000000)break;
+        unsigned remaining=(unsigned)(1000000-(now-begin));
+        if(!measured_delay(o,remaining<10000?remaining:10000,&poll))return false;
     }
     uint32_t reset_config[64];
     if(!ready)return false;

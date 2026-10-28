@@ -1,0 +1,12 @@
+{
+  "audit_date": "2026-10-28",
+  "repository": "UEFI/UEFI-Specification-Release",
+  "commit": "82804ed40f173589b372fa303d1e69956dcfa153",
+  "path": "source/07_Services_Boot_Services.rst",
+  "url": "https://github.com/UEFI/UEFI-Specification-Release/blob/82804ed40f173589b372fa303d1e69956dcfa153/source/07_Services_Boot_Services.rst",
+  "source_sha256": "43CFFC517D8D63BD7C0FBD3BF37E9B4AEAFCC6247B19D9D5BC20B92A2E810A78",
+  "source_bytes": 207065,
+  "scope": "Specification text inspection and local CPU tests only",
+  "native_adapter": false,
+  "hardware_access": false
+}

@@ -50,6 +50,11 @@ typedef struct {
     bool readout_valid;
 } MsiPreFlrEvidence;
 typedef struct {
+    uint64_t before,after;
+    unsigned requested_us;
+    bool clock_valid,service_ok;
+} MsiDelayEvidence;
+typedef struct {
     uint64_t resets,restores,unmaps,frees,claim_closes;
     unsigned live_dma;
     bool owner_violation;
@@ -94,7 +99,11 @@ typedef struct {
     /* Every encoding covering the FLR bit must use a backend MsiResetGate
      * before callbacks/effects, not merely test the current phase/counters. */
     bool (*write_config)(void *,unsigned offset,unsigned width,uint32_t);
-    void (*stall)(void *,unsigned microseconds);
+    bool (*stall)(void *,unsigned microseconds);
+    /* Independent monotonic CPU-only timebase, never PCI/MMIO/log/console I/O.
+     * A successful delay return alone does not prove an elapsed interval.
+     * Calibration, counter rollover and real timing-service binding are unqualified. */
+    bool (*clock_us)(void *,uint64_t *);
     bool (*read_mmio)(void *,uint32_t offset,uint32_t *);
     /* Host-only contract: exclude competing mutations until guarded transfer
      * or terminal stop. A failed begin may be partial; never implicitly unlock.
@@ -133,6 +142,10 @@ typedef struct {
     unsigned stops,transactions,flrs,windows_calls;
     unsigned failed_stage;
     MsiPreFlrEvidence pre_flr;
+    MsiDelayEvidence quiet;
+    /* After a possibly effective FLR with unproven quiet time: RAM-only stop.
+     * Do not even invoke log close or the ordinary final PCI containment. */
+    bool quiet_uncertain;
 } MsiSession;
 bool msi_graph_stage(const MsiGraph *,const MsiGraph *,unsigned stage,bool exclusive);
 bool msi_config_matches(const MsiOps *,const uint32_t reference[64]);

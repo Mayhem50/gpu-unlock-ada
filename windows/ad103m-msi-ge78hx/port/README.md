@@ -68,7 +68,7 @@ without `MSI_OFFLINE_HOST` or with `GU_UEFI_PORT` enabled.
   Consume the session before staging, and privately copy the operations,
   qualification flags and preflight reference before any external callback.
 - `src/reset.c`: bounded pending/readiness polling, one FLR attempt, at least
-  100 ms without PCI/MMIO access even if the FLR write reports failure,
+  100 ms of independently measured quiet time even if the FLR write reports failure,
   restore pinned BARs with decoding disabled, leave bus mastering disabled,
   and validate post-reset state again immediately before handoff.
   Never promote transaction-time configuration to a new reference. Reject
@@ -88,6 +88,9 @@ can fail and is reported separately. A returned Windows start callback is always
 an error, including a nominal success return; it proves no operating-system boot.
 Failure containment is attempted immediately and checked again after log close,
 with no subsequent callback except the config reads/writes of that final check.
+Exception: after an unproved FLR quiet interval there are **no** callbacks at
+all, including containment and log close. The model records a RAM-only terminal
+result and retains resources; it cannot freshly claim BME-off containment.
 `containment_verified` describes only that last observation, not permanent
 quiescence. `terminal_required` forbids treating the host function's return as
 permission for a future EFI entry point to return. No terminal EFI mechanism is
@@ -160,9 +163,25 @@ or nonreturning terminal implementation. The successful compound commit remains
 an unqualified CPU abstraction. Failure returns trigger only the existing
 terminal/containment path, not continuation to Windows.
 
+### Timing and UEFI feasibility — 2026-10-28
+
+`stall` now returns status and `clock_us` supplies a separate monotonic CPU-only
+timebase. Both clock reads must succeed and show sufficient elapsed quiet time.
+Short success, clock failure/freeze/backwards movement or rollover stops without
+post-reset accesses. A failed stall with independently proved full elapsed time
+still aborts, but ordinary containment is then permitted. Pending/readiness
+budgets use observed time; oversleep past the budget issues no further poll.
+Session/counter repair cannot bypass `quiet_uncertain`. The clock's real
+calibration and a native nonreturning stop remain unimplemented.
+
+The [TPL feasibility review and blocked staged test plan](../../../docs/windows-msi-ge78hx-uefi-handoff-timing.md)
+shows why a blanket raised-TPL commit is insufficient: StartImage requires a
+lower level, where queued notifications may run. It records requirements for
+per-source exclusion and per-service review; no native strategy is qualified.
+
 ## Validation result — 2026-10-28
 
-The offline C suite passed **218,450 assertions across 452 workflow scenarios**,
+The offline C suite passed **243,622 assertions across 499 workflow scenarios**,
 plus **45 isolated per-resource ledger cases** in the same executable.
 Coverage includes both captures, profile/ROM mutations, missing/extra/duplicate
 owners, each partially failed detach, boundary/console/logging drift, exclusive
@@ -170,6 +189,8 @@ claim failure, narrow decode restoration, invalid transaction proofs, inaccessib
 post-transaction SEC2, pending/readiness timeouts, failed FLR write, mandatory
 quiet time, BAR restoration, late MSI/identity/BAR/register drift, DMA retention,
 cleanup failures, failed containment, skip and returned Windows handoff.
+`tests/timing_regressions.h` adds failed/short waits, independent timebase errors,
+elapsed-budget overshoot and no callbacks during unproved reset quiet time.
 The former counterexamples are now `tests/regression_tests.h`, included in the
 normal build: wrong capability IDs/pointers/versions, control and BAR drift,
 mutated caller reference, silently incorrect restoration, late control/BME drift,

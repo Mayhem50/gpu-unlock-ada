@@ -199,7 +199,8 @@ static bool write_config(void *v,unsigned offset,unsigned width,uint32_t value) 
     m->config[offset/4]=(m->config[offset/4]&~(mask<<shift))|((value&mask)<<shift);
     return true;
 }
-static void stall(void *v,unsigned usec){reentry_probe();Mock *m=v;m->clock+=usec;}
+static bool stall(void *v,unsigned usec){reentry_probe();Mock *m=v;m->clock+=usec;return true;}
+static bool clock_us(void *v,uint64_t *out){reentry_probe();*out=((Mock *)v)->clock;return true;}
 static bool read_mmio(void *v,uint32_t offset,uint32_t *value) {
     Mock *m=v;touch(m);m->mmio_reads++;CHECK(m->transactions==1);
     switch(offset) {
@@ -343,7 +344,7 @@ static void commit_windows(void *v,const MsiGuard *g,bool *dma_retained) {
 static MsiOps ops(void) {
     MsiOps o={&M,observe,snapshot,stage_windows,silence,disconnect,claim,restore_decode,
               {MSI_PRE_RESET_RETAINED_V1,transaction},lifecycle,
-              read_config,write_config,stall,read_mmio,begin_guard,guard_valid,prepare_dma_release,prepare_claim_close,close_log,commit_windows};
+              read_config,write_config,stall,clock_us,read_mmio,begin_guard,guard_valid,prepare_dma_release,prepare_claim_close,close_log,commit_windows};
     return o;
 }
 static void run(enum Fault fault,bool consent,const MsiQualification *q) {
@@ -441,10 +442,11 @@ static void ownership_tests(void) {
 #include "lifecycle_regressions.h"
 #include "retention_regressions.h"
 #include "dma_regressions.h"
+#include "timing_regressions.h"
 int main(void) {
     FILE *f=fopen("build/prom.bin","rb");CHECK(f!=NULL);Prom=malloc(1048576);CHECK(Prom);
     CHECK(fread(Prom,1,1048576,f)==1048576&&fgetc(f)==EOF);fclose(f);
-    profile_tests();ownership_tests();workflow_tests();regression_tests();followup_regressions();method_regressions();lifecycle_regressions();retention_regressions();dma_regressions();free(Prom);
+    profile_tests();ownership_tests();workflow_tests();regression_tests();followup_regressions();method_regressions();lifecycle_regressions();retention_regressions();dma_regressions();timing_regressions();free(Prom);
     printf("PASS: %u host assertions, %u workflow scenarios.\n",Checks,Scenarios);
     puts("ROM/FWSEC profile, staged release, FLR quiet time/restore, DMA retention and Windows invocation: mocked only.");
     puts("No GPU access, firmware execution, payload or native UEFI backend; real candidate remains refused.");

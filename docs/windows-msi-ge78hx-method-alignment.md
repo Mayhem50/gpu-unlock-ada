@@ -1,7 +1,7 @@
 # MSI host prototype: alignment with the repository method
 
 Initial review: 2026-10-27, implementation `f3a7795`; table updated after host
-FBPA/readout, lifecycle-ownership and 2026-10-28 per-resource DMA remediation. Scope: local source,
+FBPA/readout, lifecycle-ownership and 2026-10-28 DMA/timing remediation. Scope: local source,
 existing private capture-derived fixtures and CPU tests. No GPU query, EFI,
 USB deployment or security modification. Sources below are this checkout,
 not live re-verification of external owner reports or issue #76.
@@ -30,7 +30,7 @@ all future hazards are known or all gates passed.
 | GFW/FWSEC/signature/boot/restore/selectors/reset/unwind: AD104 vendor/unlock_610.c | Typed retained pre-reset step; sole scheduler/private reset; single-use backend gate blocks raw replay before effects; full core boundary refused | T1 host complete after F3; T2/T6/T7 open |
 | Four sampled PLMs, three required values: ad102_sample_permissions | All four sampled, FBPA accessibility only, independent PCI/chip proof and raw failure evidence | T3 host complete |
 | Effective readout at selectors/pre-FLR/post-FLR: ad102_readout | Pre-FLR check repeated just before FLR; existing post-FLR check retained. Actual selector writes unimplemented | T4 host readbacks complete; T2 open |
-| Pre-BME saved state; BME off; one FLR; quiet period; decode-off restore: AD104 port.c | Private reference, 100 ms quiet, strict compare before decode; pending budget 100 ms versus reference 1 s | T8 |
+| Pre-BME saved state; BME off; one FLR; quiet period; decode-off restore: AD104 port.c | Private reference, measured 100 ms quiet, strict compare before decode; failed clock/delay and elapsed budgets modeled; pending budget 100 ms versus reference 1 s | T8 host substep covered; native open |
 | Post-FLR GFW and SEC2 reset release: reference reset path | Selected registers checked; SEC2 choreography absent | T5 |
 | DMA ledger, partial errors, terminal halt: AD104 port.c/app.c | Per-resource host states, partial Map/Unmap/FreeBuffer, pending calls and retained tombstones; native resource/timing/terminal handling absent | T6 host substep covered; T6–T9 native open |
 | DMA release, claim close, USB close, final check, StartImage: AD104 app.c | Keeps DMA/claim through callbacks, then abstract compound commit; intentional ordering divergence | T7 |
@@ -78,10 +78,17 @@ The design and workspace entry point are updated accordingly. The initial review
 changed no code; the subsequent remediation adds host checks and regressions.
 No adapter is prepared.
 
-Current validation after remediation: 452 host workflow scenarios / 218,450 assertions,
+Current validation after remediation: 499 host workflow scenarios / 243,622 assertions,
 45 isolated DMA ledger cases and 39 Python tests pass. Local documentation links and whitespace checks pass;
 the existing diagnostic EFI hash is unchanged. This does not include a rerun of
 the AD104 full core or Linux test-full suites and supplies no native MSI evidence.
+
+The [UEFI feasibility/timing review](windows-msi-ge78hx-uefi-handoff-timing.md)
+adds primary specification evidence and a blocked staged no-unlock test plan.
+A raised-TPL commit cannot simply include StartImage; lowering TPL may run
+notifications. No native exclusion strategy is accepted. Unproved post-FLR
+quiet time now bypasses even ordinary PCI/log containment and requires a
+RAM-only terminal result, which is still not a native terminal implementation.
 
 The [subsequent review and remediation](windows-msi-ge78hx-pre-flr-review.md)
 records F3/F4 and their integrated rejection regressions. Raw reset now uses a

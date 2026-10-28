@@ -1,6 +1,6 @@
 # MSI GE78HX: evidence and validation checklist
 
-Updated 2026-10-28 after the v0.2.0 audit and host per-resource DMA model. This is a gate register,
+Updated 2026-10-28 after the host DMA/timing work and UEFI feasibility review. This is a gate register,
 not an execution packet. Checked means the stated evidence exists, not that
 the machine is qualified for unlock. Open items block the relevant next stage.
 Current scope: repository review and CPU tests only; no GPU queries, EFI launch,
@@ -51,7 +51,7 @@ It does not admit this MSI's 2717 ID. No external code was integrated.
   release; final compound commit revalidates state and lease at its action.
 - [x] Partial console mutation tracked before callback; terminal result on failure,
   without GPU cleanup for console-only errors or unverified automatic rollback.
-- [x] 452 CPU workflow scenarios / 218,450 assertions and 45 isolated DMA ledger
+- [x] 499 CPU workflow scenarios / 243,622 assertions and 45 isolated DMA ledger
   cases; diagnostic CPU suites
   (7,925 application / 192 platform), 39 Python tests, identity and PE/source
   checks recorded passing. Counts include repeated checks, not independent requirements.
@@ -130,9 +130,15 @@ this MSI model validation. Their scenario counts are not MSI coverage.
   Our atomic epoch/commit is CPU-only and differs from the reference ordering.
   A token or blanket RaiseTPL does not prove FreeBuffer/CloseProtocol/StartImage
   indivisible. Refuse/redesign if the contract cannot be implemented safely.
+  The [specification review](windows-msi-ge78hx-uefi-handoff-timing.md) rules out
+  treating raised TPL alone as continuous exclusion across StartImage. Restoration
+  may dispatch notifications; source-specific quiescence and service callbacks
+  still require evidence. No native strategy or adapter is supplied.
 - [ ] **T8:** failed/short timing service, pending/readiness timeouts, failed or
-  ignored accesses, hangs and combined errors. Current void stall cannot convey
-  native timing-service failure.
+  ignored accesses, hangs and combined errors. **Host substep now covered:** status-returning
+  delay, independent clock evidence and elapsed budgets; unproved quiet time
+  permits no PCI/log/cleanup callback and refuses replay. The old void stall was
+  replaced. Native clock calibration, hung calls and terminal handling remain open.
 - [ ] **T9:** native terminal failure mechanism: no ordinary EFI return,
   reconnect, retry, implicit guard release or unverified free after mutation.
   terminal_required is a result flag, not that implementation.
