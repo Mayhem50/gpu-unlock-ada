@@ -54,6 +54,16 @@ pwsh -NoProfile -File windows/ad103m-msi-ge78hx/stock-handoff/Build.ps1 -EspConf
 
 Never fabricate this confirmation from the Windows copy. A differing ESP
 fingerprint needs separate investigation, not a relaxed hash or forced launch.
+If an existing `bootmgfw.efi` or `bootmgfw_EX.efi` under the Windows component
+store matches the operator's ESP bytes exactly, `-EspImage` may select that
+reference. It must have a valid Microsoft Windows signature, pass the PE checks
+and match the confirmed byte count and full SHA256. The runtime still accepts
+one exact hash; this does not add alternate accepted images or change the ESP.
+On 2026-10-28 the operator's ESP fingerprint matched an authenticated WinSxS
+`bootmgfw_EX.efi`, version 10.0.28000.376. The ordinary servicing copy differed.
+Four negative profile-selection tests verify missing confirmation, an invalid
+reference location, a wrong fingerprint and the mismatching default servicing
+copy cannot overwrite the approved profile.
 Windows updates may invalidate the pin; re-read/review and rebuild rather than
 accept another image. Partition GUIDs, local fingerprints and build outputs
 remain ignored. No Windows/NVIDIA proprietary image is embedded or published.

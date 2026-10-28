@@ -1,9 +1,9 @@
-param([string]$Python='python',[string]$VcVars='',[string]$EspConfirmation='')
+param([string]$Python='python',[string]$VcVars='',[string]$EspConfirmation='',[string]$EspImage='')
 $ErrorActionPreference='Stop'
 $build=Join-Path $PSScriptRoot 'build'
 [void][IO.Directory]::CreateDirectory($build)
 [ordered]@{tests_passed=$false;hardware_tested=$false;deployed=$false} | ConvertTo-Json | Set-Content (Join-Path $build 'manifest.json')
-& (Join-Path $PSScriptRoot 'Prepare-Profile.ps1') -EspConfirmation $EspConfirmation
+& (Join-Path $PSScriptRoot 'Prepare-Profile.ps1') -EspConfirmation $EspConfirmation -EspImage $EspImage
 if(-not $VcVars){
  $finder=[Environment]::ExpandEnvironmentVariables('%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe')
  $install=& $finder -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
@@ -46,8 +46,12 @@ if($LASTEXITCODE -ne 0){Get-Content (Join-Path $build 'host-validation.log') -Ta
 Get-Content (Join-Path $build 'host-validation.log')
 & $Python (Join-Path $PSScriptRoot 'tools/verify.py')
 if($LASTEXITCODE -ne 0){throw 'Stock-only source/PE verification failed'}
+if($EspImage){
+ & $Python (Join-Path $PSScriptRoot 'tests/profile_selection.py') --image $EspImage --confirmation $EspConfirmation
+ if($LASTEXITCODE -ne 0){throw 'Component-store profile rejection tests failed'}
+}
 $hashes=[ordered]@{}
-foreach($file in @('src/app.c','src/entry.c','src/stock.h','tests/host_tests.c','tools/verify.py','Prepare-Profile.ps1','Stage-Usb.ps1','Build.ps1','build/profile.h','build/profile.json','../../ad104-msi/sha256.c','../../ad104-msi/sha256.h','../diagnostic/src/runtime.c','../diagnostic/tools/verify.py','../../ad104-msi/vendor/edk2/headers.json')){
+foreach($file in @('src/app.c','src/entry.c','src/stock.h','tests/host_tests.c','tests/profile_selection.py','tools/verify.py','Prepare-Profile.ps1','Stage-Usb.ps1','Build.ps1','build/profile.h','build/profile.json','../../ad104-msi/sha256.c','../../ad104-msi/sha256.h','../diagnostic/src/runtime.c','../diagnostic/tools/verify.py','../../ad104-msi/vendor/edk2/headers.json')){
  $hashes[$file]=(Get-FileHash -LiteralPath (Join-Path $PSScriptRoot $file)).Hash.ToLowerInvariant()
 }
 $binary=Join-Path $build 'MSI-STOCK-A.EFI'

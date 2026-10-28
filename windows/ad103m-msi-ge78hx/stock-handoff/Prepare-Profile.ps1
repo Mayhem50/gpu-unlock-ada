@@ -1,4 +1,4 @@
-param([string]$EspConfirmation='')
+param([string]$EspConfirmation='',[string]$EspImage='')
 $ErrorActionPreference='Stop'
 $build=Join-Path $PSScriptRoot 'build'
 [void][IO.Directory]::CreateDirectory($build)
@@ -13,13 +13,22 @@ $volume=@($part.AccessPaths | Where-Object {$_ -like '\\?\Volume*'})
 if($volume.Count -ne 1){throw 'Ambiguous ESP volume path'}
 $espPath=$volume[0]+'EFI\Microsoft\Boot\bootmgfw.efi'
 $osPath=Join-Path $env:windir 'Boot\EFI\bootmgfw.efi'
+$servicingPath=$osPath
+if($EspImage){
+    if(-not $EspConfirmation){throw 'A selected component-store image requires the actual ESP fingerprint'}
+    $candidate=[IO.Path]::GetFullPath((Resolve-Path -LiteralPath $EspImage).Path)
+    $store=[IO.Path]::GetFullPath((Join-Path $env:windir 'WinSxS'))+[IO.Path]::DirectorySeparatorChar
+    if(-not $candidate.StartsWith($store,[StringComparison]::OrdinalIgnoreCase) -or
+       [IO.Path]::GetFileName($candidate) -notin @('bootmgfw.efi','bootmgfw_EX.efi')){throw 'Selected image must be an existing Windows component-store boot manager'}
+    $osPath=$candidate
+}
 $osBytes=[IO.File]::ReadAllBytes($osPath)
 $signature=Get-AuthenticodeSignature -LiteralPath $osPath
-if($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'CN=Microsoft Windows,'){throw 'Unverified Windows servicing copy'}
+if($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'CN=Microsoft Windows,'){throw 'Unverified Microsoft Windows image'}
 $origin=$osPath;$bytes=$osBytes;$espVerified=$false;$espError=$null
 try {
     $espBytes=[IO.File]::ReadAllBytes($espPath)
-    if([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($espBytes)) -ne [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($osBytes))){throw 'ESP image differs from authenticated Windows servicing copy'}
+    if([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($espBytes)) -ne [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($osBytes))){throw 'ESP image differs from the selected authenticated Windows image'}
     $bytes=$espBytes;$origin=$espPath;$espVerified=$true
 } catch {
     # Access denial can use the authenticated servicing copy as a REQUIRED
@@ -31,12 +40,16 @@ $digest=[Security.Cryptography.SHA256]::HashData($bytes)
 $operatorConfirmed=$false;$confirmationHash=$null
 if($EspConfirmation){
     $confirmation=Get-Content -LiteralPath $EspConfirmation -Raw | ConvertFrom-Json
-    if([uint64]$confirmation.TailleOctets -ne $bytes.Length -or $confirmation.SHA256.ToLowerInvariant() -ne [Convert]::ToHexString($digest).ToLowerInvariant()){throw 'Operator ESP fingerprint does not match authenticated Windows copy; do not widen the pin'}
+    if([uint64]$confirmation.TailleOctets -ne $bytes.Length -or $confirmation.SHA256.ToLowerInvariant() -ne [Convert]::ToHexString($digest).ToLowerInvariant()){throw 'Operator ESP fingerprint does not match the selected authenticated image; do not widen the pin'}
     $operatorConfirmed=$true;$confirmationHash=(Get-FileHash -LiteralPath $EspConfirmation).Hash.ToLowerInvariant()
 }
 $guid=([Guid]$part.Guid).ToByteArray()
 $start=[uint64]($part.Offset/$sector);$sectors=[uint64]($part.Size/$sector)
 $profile=[ordered]@{schema=1;purpose='Stage A normal Windows handoff only';partition_guid=$part.Guid;partition_number=$part.PartitionNumber;logical_sector_size=$sector;start_lba=$start;sectors=$sectors;image_bytes=$bytes.Length;image_sha256=[Convert]::ToHexString($digest).ToLowerInvariant();hash_origin=$origin;esp_bytes_read_and_matched=$espVerified;operator_esp_confirmed=$operatorConfirmed;operator_confirmation_sha256=$confirmationHash;esp_read_error=$espError;authenticode_status=$signature.Status.ToString();signer=$signature.SignerCertificate.Subject;gpu_access=$false;esp_modified=$false;protections_modified=$false;utc=[DateTime]::UtcNow.ToString('o')}
+$profile.selected_image_version=(Get-Item -LiteralPath $osPath).VersionInfo.FileVersion
+$profile.selected_image_issuer=$signature.SignerCertificate.Issuer
+$profile.servicing_copy_sha256=(Get-FileHash -LiteralPath $servicingPath).Hash.ToLowerInvariant()
+$profile.selected_component_store_image=[bool]$EspImage
 $profile.usb_target=$null
 if(Test-Path -LiteralPath E:/){
     $usbPartition=Get-Partition -DriveLetter E

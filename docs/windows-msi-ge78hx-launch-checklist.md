@@ -150,10 +150,18 @@ this MSI model validation. Their scenario counts are not MSI coverage.
   built with the real adapter under 59 fake-UEFI cases / 1,909 assertions,
   plus native PE/source/header verification. No GPU protocols, payload, reset,
   DMA or file-write route. Explicit W only; timeout aborts.
-- [ ] **A1:** confirm actual ESP bytes (non-admin direct read was denied;
-  authenticated Windows servicing copy is the provisional strict runtime pin),
-  current security/recovery state and exact USB/binary. No firmware execution
-  has occurred. Staging refuses pending fingerprint confirmation.
+- [x] **A1 image pin:** operator admin ESP fingerprint matched exactly to an
+  existing, valid Microsoft-signed component-store `bootmgfw_EX.efi`, version
+  10.0.28000.376. The default Windows servicing copy differed; the runtime now
+  pins only the actual ESP image. No ESP file was changed.
+- [x] **A1 USB preparation:** Stage A copied to the identity-checked Kingston;
+  destination SHA256 verified, prior diagnostic backed up and its SHA256 checked.
+  No formatting, internal ESP write or boot-variable change. Local deployment
+  journal records the exact artifact and backup; no firmware execution occurred.
+- [ ] **A1 remaining:** confirm current BitLocker/recovery state before boot.
+  Windows reports Secure Boot disabled in its registry view; the non-admin
+  process could not read BitLocker status. No protection was changed. Staging
+  still refuses an unconfirmed fingerprint on any future rebuild.
 - [ ] **A2:** manually demonstrate normal Windows handoff/display/input.
   This is not the release/reset test below and cannot close T2/T5–T9 or V1–V4.
 

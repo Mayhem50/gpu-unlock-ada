@@ -25,7 +25,11 @@ Assert-UsbIdentity
 $target=[IO.Path]::GetFullPath('E:\EFI\BOOT\BOOTX64.EFI')
 if($target -cne 'E:\EFI\BOOT\BOOTX64.EFI' -or -not(Test-Path -LiteralPath $target -PathType Leaf)){throw 'Unexpected USB fallback path'}
 $previous=(Get-FileHash -LiteralPath $target).Hash.ToLowerInvariant()
-if($previous -ceq $manifest.sha256){Write-Output 'Exact stock test already staged; not executed';exit}
+if($previous -ceq $manifest.sha256){
+ $manifest.deployed=$true
+ $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding utf8
+ Write-Output 'Exact stock test already staged; not executed';exit
+}
 if($previous -cne '18efed6c4a60ce0ae682fb9c9d165f425c280a2159e32f57124f8cf3c41703f9'){throw 'USB fallback is not the reviewed diagnostic; refuse to replace it'}
 $stamp=[DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
 $backup=Join-Path $build ('usb-backups/'+$stamp)

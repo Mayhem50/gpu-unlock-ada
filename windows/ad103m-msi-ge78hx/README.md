@@ -22,7 +22,9 @@ The separate [Stage A stock handoff](stock-handoff/README.md) is now built for
 a first normal Windows boot test: it has no GPU protocols, DMA, release/reset
 or unlock. Its USB staging helper is gated on the actual ESP fingerprint and
 verified removable-media identity. It has not been executed on firmware;
-the current provisional profile awaits direct ESP fingerprint confirmation.
+the current profile is tied to the operator-reported ESP fingerprint and an
+identical authenticated component-store image. Current security/recovery checks
+and the physical test are separate from this source/build evidence.
 `build/`, `local/`, and `captures/` are
 ignored because captures can include proprietary firmware and machine-specific
 data.
