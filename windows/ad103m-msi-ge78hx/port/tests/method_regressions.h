@@ -29,7 +29,7 @@ static void method_read_case(uint32_t offset,uint32_t value,unsigned mode,bool s
     MsiOps o=ops();o.read_mmio=method_read;execute_regression(&o);
     if(succeeds) {
         CHECK(M.windows==1&&M.life.resets==1&&M.life.restores==1);
-        CHECK(M.life.unmaps==1&&M.life.frees==1&&M.life.claim_closes==1&&!M.life.live_dma);
+        CHECK(M.life.unmaps==2&&M.life.frees==2&&M.life.claim_closes==1&&!M.life.live_dma);
         CHECK(S.pre_flr.attempted_mask==15&&S.pre_flr.transport_mask==15&&S.pre_flr.valid_mask==15);
     } else no_reset_or_cleanup();
 }
@@ -109,7 +109,7 @@ static void method_regressions(void) {
         setup(OK);o=ops();o.pre_reset.run=ownership_transaction;execute_regression(&o);
         if(!ProbeMode) {
             CHECK(M.windows==1&&S.flrs==1&&M.life.resets==1&&M.life.restores==1);
-            CHECK(M.life.unmaps==1&&M.life.frees==1&&M.life.claim_closes==1&&!M.life.live_dma);
+            CHECK(M.life.unmaps==2&&M.life.frees==2&&M.life.claim_closes==1&&!M.life.live_dma);
             unsigned writes=M.config_writes;
             CHECK(!msi_reset_owned(&o,&S,M.observation.config,2)&&M.config_writes==writes);
         } else {
@@ -126,6 +126,6 @@ static void method_regressions(void) {
     setup(OK);o=ops();o.prepare_claim_close=hidden_cleanup_preparation;execute_regression(&o);
     CHECK(S.terminal_required&&S.dma_retained&&!M.freed&&!M.windows&&M.life.frees==1);
     setup(OK);o=ops();RecursiveResetRejections=0;o.read_mmio=recursive_reset_read;execute_regression(&o);
-    CHECK(M.windows==1&&M.life.resets==1&&M.life.frees==1&&RecursiveResetRejections>0);
+    CHECK(M.windows==1&&M.life.resets==1&&M.life.frees==2&&RecursiveResetRejections>0);
     puts("PASS: FBPA/readout pre-FLR and single reset/cleanup ownership regressions.");
 }

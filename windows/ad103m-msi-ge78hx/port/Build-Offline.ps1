@@ -26,7 +26,7 @@ cl /nologo /std:c11 /W4 /WX /DMSI_OFFLINE_HOST /c tests\forbidden_full_core.c /F
 if not errorlevel 1 exit /b 1
 cl /nologo /std:c11 /W4 /WX /wd4244 /O2 /D_CRT_SECURE_NO_WARNINGS /c ..\..\ad104-msi\vendor\vbios_610.c /Fobuild\vbios_610.obj
 if errorlevel 1 exit /b 1
-cl /nologo /std:c11 /W4 /WX /O2 /DMSI_OFFLINE_HOST /D_CRT_SECURE_NO_WARNINGS /Ibuild /I..\..\ad104-msi\vendor /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 tests\host_tests.c src\profile.c src\ownership.c src\readbacks.c src\reset.c src\session.c ..\diagnostic\src\core.c build\vbios_610.obj /Fobuild\ /Febuild\msi-offline-tests.exe
+cl /nologo /std:c11 /W4 /WX /O2 /DMSI_OFFLINE_HOST /D_CRT_SECURE_NO_WARNINGS /Ibuild /I..\..\ad104-msi\vendor /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 tests\host_tests.c src\dma.c src\profile.c src\ownership.c src\readbacks.c src\reset.c src\session.c ..\diagnostic\src\core.c build\vbios_610.obj /Fobuild\ /Febuild\msi-offline-tests.exe
 if errorlevel 1 exit /b 1
 build\msi-offline-tests.exe >build\validation.log 2>&1
 exit /b %errorlevel%

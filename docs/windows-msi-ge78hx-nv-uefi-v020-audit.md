@@ -13,8 +13,10 @@ tag contains several failure paths that contradict the retention, ownership
 and single-reset requirements of our host model. Do not transplant the loader
 or replace our final compound commit with its reconnect/chainload path.
 
-Our model also remains incomplete: its atomic commit is a RAM mock, its DMA
-inventory is aggregate bookkeeping, and its pre-reset firmware step is synthetic.
+At the audit reference commit our DMA inventory was aggregate bookkeeping.
+The subsequent [host DMA model](../windows/ad103m-msi-ge78hx/port/README.md#per-resource-dma-model--2026-10-28)
+adds per-resource states and partial-error tests. Our model still remains
+incomplete: its atomic commit is a RAM mock and its pre-reset firmware step is synthetic.
 This audit closes none of the native qualification gates T2/T5–T9 or V1–V4.
 
 ## Provenance and confidence
@@ -114,9 +116,10 @@ Counterexample: Unmap fails, FreeBuffer succeeds → mapping uncertainty plus
 freed backing memory, then successful transaction return and OS chainload.
 FreeBuffer failure likewise leaves an allocation while the object says released.
 
-MSI: sticky retention is the appropriate requirement, but `host_tests.c` performs
-mock aggregate release in one indivisible action. It does not test real individual
-Unmap/FreeBuffer partial outcomes. T6 remains open; no native safety claim.
+MSI at the audit reference: mock aggregate release only. The subsequent host
+model records individual partial Unmap/FreeBuffer outcomes, stops on failure and
+retains uncertain records. It still does not test real firmware services or prove
+the final compound action implementable. T6 remains open; no native safety claim.
 
 ### A5 — P1: early DMA failures lose bookkeeping before emergency handoff
 
@@ -271,9 +274,10 @@ read/hash checked only and remains SHA256
 
 1. Specify legal per-call UEFI TPL/event/reentry rules and the final transfer
    sequence. Decide whether the current abstract compound commit is implementable.
-2. Model a per-buffer allocation/mapping inventory, partial Map/Unmap/FreeBuffer
-   outcomes and claim-close failure, retaining every uncertain live record.
-   Include early-exit/invalid-lease combinations and no retry/rearm.
+2. Per-buffer allocation/mapping and partial Map/Unmap/FreeBuffer outcomes are
+   now covered in the subsequent host model, including invalid-lease combinations,
+   pending calls and no retry/rearm. Real service binding, quiescence/exclusion
+   and claim-close partial outcomes remain unqualified.
 3. Add pre-copy asset length/digest admission and typed, bounded firmware phases
    (GFW, FWSEC, payload/HALT, metadata restoration, selector publication, post-FLR).
 4. Specify and test failure-aware timing and a terminal policy independent of

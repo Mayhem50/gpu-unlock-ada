@@ -56,6 +56,10 @@ without `MSI_OFFLINE_HOST` or with `GU_UEFI_PORT` enabled.
   verify each proposed detach stage. Preserve boundary, console and logging
   fingerprints. Stable fingerprints do not resolve the identities of external
   owners or establish callback safety.
+- `src/dma.c` / `src/dma.h`: per-resource RAM ledger, fixed 128-record bound,
+  immutable session IDs and retained tombstones. Track requested/rounded sizes,
+  numeric host/device addresses, mapping tokens and outstanding operations.
+  No pointer dereference, allocation, firmware call or native DMA binding.
 - `src/session.c`: stage the future Windows image before mutation, detach
   TextOut then GraphicsConsole then NVIDIA, obtain exclusive ownership, check
   a synthetic transaction result and reset. Prepare cleanup without releasing
@@ -118,9 +122,48 @@ failure requires a terminal result even before the first GPU detach. This state
 is distinct from GPU mutation and does not trigger PCI/MMIO cleanup for a
 console-only failure. No automatic console rollback is claimed.
 
-## Validation result — 2026-10-27
+### Per-resource DMA model — 2026-10-28
 
-The offline C suite passed **191,252 assertions across 410 workflow scenarios**.
+The normal mock transaction now records two distinct allocations/mappings,
+and the final mock commit releases them individually. Lifecycle snapshots
+reconcile aggregate counters against that inventory; pending/unknown resources
+or premature cleanup refuse reset/transfer. Stock commit checks resource history
+before lease validation, so repairing aggregate counters cannot hide records.
+
+Each operation has a begin/end pair. Begin reserves the attempt before a
+simulated backend could act; end records returned outputs even after a rejected
+reentrant attempt. Unknown results remain unknown, including a failure whose
+output pointers were left zero. `NO_EFFECT` requires independent evidence;
+an EFI error is not such evidence. A proven failed Map can leave a known
+allocation eligible for explicit quiescence-authorized rollback, but the run
+remains failed and cannot become a successful Windows transfer.
+
+Map accepts only full rounded-buffer coverage, unique nonzero mapping tokens,
+nonoverlapping page-aligned host/device ranges and a device range below 2^49.
+These are conservative host-model constraints, not qualification of a real MSI
+IOMMU or firmware's identity-mapping conventions. Invalid replies retain all
+returned metadata. File bounds/runtime asset digests remain a separate P5 gate.
+
+Cleanup is one-use and requires the synthetic final safety proof. After an
+unsuccessful Unmap no FreeBuffer is authorized. An uncertain FreeBuffer result
+does not erase the resource even if the simulated firmware actually freed it.
+The first cleanup failure stops remaining cleanup, claim close and transfer;
+completed earlier resources remain tombstones and remaining/uncertain records
+stay retained. No retry occurs. `dma_retained` means that some ownership remains
+unproven, not that every original buffer is still physically allocated.
+
+`tests/dma_regressions.h` covers 45 ledger cases, both resource positions and
+error-with/without-effect workflow faults, malformed Map replies, wrong order,
+duplicate/reentrant operations, counter repair, stock history and pending calls.
+There is no real AllocateBuffer/Map/Unmap/FreeBuffer, IOMMU, UEFI TPL exclusion
+or nonreturning terminal implementation. The successful compound commit remains
+an unqualified CPU abstraction. Failure returns trigger only the existing
+terminal/containment path, not continuation to Windows.
+
+## Validation result — 2026-10-28
+
+The offline C suite passed **218,450 assertions across 452 workflow scenarios**,
+plus **45 isolated per-resource ledger cases** in the same executable.
 Coverage includes both captures, profile/ROM mutations, missing/extra/duplicate
 owners, each partially failed detach, boundary/console/logging drift, exclusive
 claim failure, narrow decode restoration, invalid transaction proofs, inaccessible

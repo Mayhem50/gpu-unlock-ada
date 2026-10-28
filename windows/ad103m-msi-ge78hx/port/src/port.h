@@ -86,7 +86,10 @@ typedef struct {
     bool (*claim)(void *);
     bool (*restore_decode)(void *,unsigned io_memory_mask); /* protocol-aware IO/MEM only */
     MsiPreResetStep pre_reset; /* no FLR, PCI restore, unmap/free or claim close */
-    bool (*lifecycle)(void *,MsiLifecycle *); /* RAM bookkeeping only; fail closed */
+    /* RAM bookkeeping only. Backend must reconcile the aggregate with its
+     * per-resource ledger, including outstanding calls and cleanup history;
+     * repaired aggregate counters never override retained resource records. */
+    bool (*lifecycle)(void *,MsiLifecycle *);
     bool (*read_config)(void *,unsigned offset,unsigned width,uint32_t *);
     /* Every encoding covering the FLR bit must use a backend MsiResetGate
      * before callbacks/effects, not merely test the current phase/counters. */

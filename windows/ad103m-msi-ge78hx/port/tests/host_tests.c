@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /* All side effects are virtual PCI/register/graph state in this process. */
 #include "../src/port.h"
+#include "../src/dma.h"
 #include "captured_fixture.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +17,8 @@ enum Fault {OK,STAGE_FAIL,OBSERVE_DRIFT,EXTRA_OWNER,STOP1_FAIL,STOP2_FAIL,STOP3_
  POST_HALT_FAIL,DMA_FREE_FAIL,CLOSE_CLAIM_FAIL,CLOSE_LOG_FAIL,FINAL_GRAPH_FAIL,FINAL_MMIO_FAIL,
  RETURNED_WINDOWS,DECODE_LOST,DECODE_RESTORE_FAIL,EXTRA_CONFIG_DRIFT,PRE_SEC2_INACCESSIBLE,
  FINAL_ID_DRIFT,FINAL_BAR_DRIFT,FINAL_MSI_DRIFT,CONTAINMENT_FAIL,FLR_FAIL_NO_EFFECT};
+enum DmaFault {D_OK,D_ALLOC_NONE,D_ALLOC_UNKNOWN,D_MAP_NONE,D_MAP_SHORT,D_MAP_UNKNOWN,
+               D_UNMAP_NONE,D_UNMAP_UNKNOWN,D_FREE_NONE,D_FREE_UNKNOWN};
 typedef struct {
     MsiObservation observation;MsiGraph graph;uint32_t config[64];enum Fault fault;
     unsigned stops,transactions,stages,snapshots,observations,claims,freed,closes,windows;
@@ -35,6 +38,10 @@ typedef struct {
     unsigned raw_reset_effects;
     bool lifecycle_unreadable;
     uint32_t fbpa;
+    MsiDmaLedger dma;
+    enum DmaFault dma_fault;unsigned dma_fault_id;
+    bool dma_error_effect,dma_allocated[2],dma_mapped[2];
+    unsigned dma_unmap_calls,dma_free_calls;
 } Mock;
 static Mock M;
 static MsiSession S;
@@ -55,6 +62,7 @@ static void reentry_probe(void) {
 
 static void setup(enum Fault f) {
     memset(&M,0,sizeof(M));memset(&S,0,sizeof(S));M.fault=f;
+    CHECK(msi_dma_init(&M.dma));
     memcpy(M.observation.config,CaptureConfig0,sizeof(M.observation.config));
     memcpy(M.observation.reg,CaptureRegisters0,sizeof(M.observation.reg));
     M.observation.bar0_base=0x5e000000;M.observation.bar0_bytes=0x1000000;M.observation.bus=1;
@@ -112,7 +120,28 @@ static bool transaction(void *v,MsiProof *proof) {
     reentry_probe();
     Mock *m=v;CHECK(m->graph.exclusive&&m->stops==3);m->transactions++;m->config[1]|=4;
     memcpy(m->safety_regs,SafeRegisters,sizeof(SafeRegisters));
-    m->life.live_dma=2;
+    for(unsigned i=0;i<2;i++) {
+        unsigned id=0;
+        CHECK(msi_dma_alloc_begin(&m->dma,5000,&id)&&id==i+1);
+        bool injected=id==m->dma_fault_id;
+        uint64_t host=UINT64_C(0x100000)+i*0x10000;
+        MsiDmaResult result=MSI_DMA_OK;
+        if(injected&&m->dma_fault==D_ALLOC_NONE){result=MSI_DMA_NO_EFFECT;host=0;}
+        if(injected&&m->dma_fault==D_ALLOC_UNKNOWN)result=MSI_DMA_UNCERTAIN;
+        m->dma_allocated[i]=result==MSI_DMA_OK||(result==MSI_DMA_UNCERTAIN&&m->dma_error_effect);
+        bool allocated=msi_dma_alloc_end(&m->dma,id,result,host);
+        MsiDmaInventory inventory;CHECK(msi_dma_inventory(&m->dma,&inventory));m->life.live_dma=inventory.live;
+        if(!allocated)return false;
+        CHECK(msi_dma_map_begin(&m->dma,id));
+        uint64_t device=UINT64_C(0x100000000)+i*0x10000,token=0x900+i,bytes=8192;
+        result=MSI_DMA_OK;
+        if(injected&&m->dma_fault==D_MAP_NONE){result=MSI_DMA_NO_EFFECT;device=token=bytes=0;}
+        if(injected&&m->dma_fault==D_MAP_SHORT)bytes=4096;
+        if(injected&&m->dma_fault==D_MAP_UNKNOWN)result=MSI_DMA_UNCERTAIN;
+        m->dma_mapped[i]=result==MSI_DMA_OK||(result==MSI_DMA_UNCERTAIN&&m->dma_error_effect);
+        bool mapped=msi_dma_map_end(&m->dma,id,result,device,token,bytes);
+        if(!mapped)return false;
+    }
     *proof=(MsiProof){MSI_MARKER,true,true,true,true,2};
     if(m->fault==MARKER_FAIL)proof->marker^=1;
     if(m->fault==HALT_FAIL)proof->halted=false;
@@ -201,6 +230,8 @@ static bool atomic_safe(Mock *m,const MsiGuard *g,bool exclusive) {
         m->reset_gate.spent&&!m->reset_gate.violation&&
         !m->life.owner_violation&&m->life.resets==1&&m->life.restores==1&&
         !m->life.unmaps&&!m->life.frees&&!m->life.claim_closes&&m->life.live_dma==2&&
+        m->dma.initialized&&!m->dma.faulted&&!m->dma.violation&&m->dma.used==2&&!m->dma.cleanup_spent&&
+        m->dma.resource[0].state==MSI_DMA_MAPPED&&m->dma.resource[1].state==MSI_DMA_MAPPED&&
         (m->fbpa&0xffff0000u)!=0xbadf0000u&&
         !m->engine_running&&!memcmp(m->safety_regs,SafeRegisters,sizeof(SafeRegisters))&&
         m->graph.identities_verified&&m->graph.console_alive&&
@@ -231,13 +262,49 @@ static bool close_log(void *v){reentry_probe();Mock *m=v;CHECK(!m->log_closed);m
 static bool lifecycle(void *v,MsiLifecycle *out) {
     reentry_probe();Mock *m=v;if(m->lifecycle_unreadable)return false;
     *out=m->life;
+    MsiDmaInventory inventory;
+    if(!msi_dma_inventory(&m->dma,&inventory))out->owner_violation=true;
+    else {
+        out->owner_violation|=m->dma.faulted||m->dma.violation||m->dma.cleanup_failed||
+            m->dma.cleanup_spent||inventory.pending||inventory.unknown||
+            (m->transactions&&inventory.mapped!=inventory.live)||
+            inventory.live!=m->life.live_dma||m->dma.unmaps!=m->life.unmaps||m->dma.frees!=m->life.frees;
+        if(inventory.live>out->live_dma)out->live_dma=inventory.live;
+    }
     out->owner_violation|=m->reset_gate.violation||(m->reset_gate.spent&&m->life.resets!=1);
     return true;
 }
 static bool record_stock_retention(const Mock *m,bool *retained) {
     MsiLifecycle inventory=m->life;
     inventory.owner_violation|=m->reset_gate.spent||m->reset_gate.violation;
+    MsiDmaInventory dma;
+    if(!msi_dma_inventory(&m->dma,&dma))inventory.owner_violation=true;
+    else {
+        inventory.owner_violation|=!msi_dma_handoff_ready(&m->dma)||m->dma.used||m->dma.cleanup_spent;
+        if(dma.live>inventory.live_dma)inventory.live_dma=dma.live;
+    }
     return msi_stock_retention(retained,&inventory,!m->lifecycle_unreadable);
+}
+static bool release_mock_dma(Mock *m) {
+    if(!msi_dma_cleanup_begin(&m->dma,true))return false;
+    for(unsigned id=1;id<=m->dma.used;id++) {
+        unsigned i=id-1;bool injected=id==m->dma_fault_id;
+        if(!msi_dma_unmap_begin(&m->dma,id))return false;
+        m->dma_unmap_calls++;MsiDmaResult result=MSI_DMA_OK;
+        if(injected&&m->dma_fault==D_UNMAP_NONE)result=MSI_DMA_NO_EFFECT;
+        if(injected&&m->dma_fault==D_UNMAP_UNKNOWN)result=MSI_DMA_UNCERTAIN;
+        if(result==MSI_DMA_OK||(result==MSI_DMA_UNCERTAIN&&m->dma_error_effect))m->dma_mapped[i]=false;
+        if(!msi_dma_unmap_end(&m->dma,id,result))return false;
+        m->life.unmaps=m->dma.unmaps;
+        if(!msi_dma_free_begin(&m->dma,id))return false;
+        m->dma_free_calls++;result=MSI_DMA_OK;
+        if(injected&&m->dma_fault==D_FREE_NONE)result=MSI_DMA_NO_EFFECT;
+        if(injected&&m->dma_fault==D_FREE_UNKNOWN)result=MSI_DMA_UNCERTAIN;
+        if(result==MSI_DMA_OK||(result==MSI_DMA_UNCERTAIN&&m->dma_error_effect))m->dma_allocated[i]=false;
+        if(!msi_dma_free_end(&m->dma,id,result))return false;
+        m->life.frees=m->dma.frees;m->life.live_dma--;
+    }
+    return msi_dma_handoff_ready(&m->dma);
 }
 static void commit_windows(void *v,const MsiGuard *g,bool *dma_retained) {
     Mock *m=v;
@@ -266,7 +333,8 @@ static void commit_windows(void *v,const MsiGuard *g,bool *dma_retained) {
     /* Model one indivisible guarded commit. No callback or hook from here
      * through resource release/claim close and transfer. */
     if(g->purpose==MSI_GUARD_FINAL){
-        m->life.unmaps++;m->life.frees++;m->life.claim_closes++;m->life.live_dma=0;
+        if(!release_mock_dma(m))return; /* no claim close or Windows after partial failure */
+        m->life.claim_closes++;
         m->freed=1;*dma_retained=false;m->graph.exclusive=false;
     }
     m->windows++;
@@ -372,10 +440,11 @@ static void ownership_tests(void) {
 #include "method_regressions.h"
 #include "lifecycle_regressions.h"
 #include "retention_regressions.h"
+#include "dma_regressions.h"
 int main(void) {
     FILE *f=fopen("build/prom.bin","rb");CHECK(f!=NULL);Prom=malloc(1048576);CHECK(Prom);
     CHECK(fread(Prom,1,1048576,f)==1048576&&fgetc(f)==EOF);fclose(f);
-    profile_tests();ownership_tests();workflow_tests();regression_tests();followup_regressions();method_regressions();lifecycle_regressions();retention_regressions();free(Prom);
+    profile_tests();ownership_tests();workflow_tests();regression_tests();followup_regressions();method_regressions();lifecycle_regressions();retention_regressions();dma_regressions();free(Prom);
     printf("PASS: %u host assertions, %u workflow scenarios.\n",Checks,Scenarios);
     puts("ROM/FWSEC profile, staged release, FLR quiet time/restore, DMA retention and Windows invocation: mocked only.");
     puts("No GPU access, firmware execution, payload or native UEFI backend; real candidate remains refused.");

@@ -1,7 +1,7 @@
 # MSI host prototype: alignment with the repository method
 
 Initial review: 2026-10-27, implementation `f3a7795`; table updated after host
-FBPA/readout and lifecycle-ownership remediation. Scope: local source,
+FBPA/readout, lifecycle-ownership and 2026-10-28 per-resource DMA remediation. Scope: local source,
 existing private capture-derived fixtures and CPU tests. No GPU query, EFI,
 USB deployment or security modification. Sources below are this checkout,
 not live re-verification of external owner reports or issue #76.
@@ -32,7 +32,7 @@ all future hazards are known or all gates passed.
 | Effective readout at selectors/pre-FLR/post-FLR: ad102_readout | Pre-FLR check repeated just before FLR; existing post-FLR check retained. Actual selector writes unimplemented | T4 host readbacks complete; T2 open |
 | Pre-BME saved state; BME off; one FLR; quiet period; decode-off restore: AD104 port.c | Private reference, 100 ms quiet, strict compare before decode; pending budget 100 ms versus reference 1 s | T8 |
 | Post-FLR GFW and SEC2 reset release: reference reset path | Selected registers checked; SEC2 choreography absent | T5 |
-| DMA ledger, partial errors, terminal halt: AD104 port.c/app.c | Flags/mock guard only; native resource/timing/terminal handling absent | T6–T9 |
+| DMA ledger, partial errors, terminal halt: AD104 port.c/app.c | Per-resource host states, partial Map/Unmap/FreeBuffer, pending calls and retained tombstones; native resource/timing/terminal handling absent | T6 host substep covered; T6–T9 native open |
 | DMA release, claim close, USB close, final check, StartImage: AD104 app.c | Keeps DMA/claim through callbacks, then abstract compound commit; intentional ordering divergence | T7 |
 | Private Windows image/path, consent/skip: AD104 boot_io.c | Staging/choice modeled; no real image pins, UI or loader | P4/V |
 | Host, hardware and workload evidence separate: docs/testing.md | CPU results only; no application-gain or recovery claim | V/W |
@@ -52,7 +52,8 @@ should be relaxed just to make a native trial pass.
    retarget its AD104 PCI ID. Native enforcement remains an open gate.
 2. The reference checks signature phase counts and ordered selector updates.
    MsiProof booleans/dma_live are not equivalent. GFW, FRTS selection, stock
-   signature restoration and partial unwind are not exercised by this mock.
+   signature restoration and actual firmware unwind are not exercised by this
+   mock. Individual DMA partial outcomes now have separate CPU ledger tests.
 3. FBPA is sampled for accessibility but is not a mandatory all-ones value.
    The wrapper now samples it and verifies the full effective readout before FLR,
    including a repeated check after pending polling. These host parity gaps are
@@ -77,8 +78,8 @@ The design and workspace entry point are updated accordingly. The initial review
 changed no code; the subsequent remediation adds host checks and regressions.
 No adapter is prepared.
 
-Current validation after remediation: 410 host scenarios / 191,252 assertions
-and 39 Python tests pass. Local documentation links and whitespace checks pass;
+Current validation after remediation: 452 host workflow scenarios / 218,450 assertions,
+45 isolated DMA ledger cases and 39 Python tests pass. Local documentation links and whitespace checks pass;
 the existing diagnostic EFI hash is unchanged. This does not include a rerun of
 the AD104 full core or Linux test-full suites and supplies no native MSI evidence.
 

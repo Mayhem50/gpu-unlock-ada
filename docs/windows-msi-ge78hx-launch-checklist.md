@@ -1,6 +1,6 @@
 # MSI GE78HX: evidence and validation checklist
 
-Updated 2026-10-28 after the nv-uefi-unlocker v0.2.0 source audit. This is a gate register,
+Updated 2026-10-28 after the v0.2.0 audit and host per-resource DMA model. This is a gate register,
 not an execution packet. Checked means the stated evidence exists, not that
 the machine is qualified for unlock. Open items block the relevant next stage.
 Current scope: repository review and CPU tests only; no GPU queries, EFI launch,
@@ -51,7 +51,8 @@ It does not admit this MSI's 2717 ID. No external code was integrated.
   release; final compound commit revalidates state and lease at its action.
 - [x] Partial console mutation tracked before callback; terminal result on failure,
   without GPU cleanup for console-only errors or unverified automatic rollback.
-- [x] 410 CPU scenarios / 191,252 assertions; diagnostic CPU suites
+- [x] 452 CPU workflow scenarios / 218,450 assertions and 45 isolated DMA ledger
+  cases; diagnostic CPU suites
   (7,925 application / 192 platform), 39 Python tests, identity and PE/source
   checks recorded passing. Counts include repeated checks, not independent requirements.
 - [x] Negative host/UEFI compilation guards and failed-build manifest invalidation.
@@ -118,9 +119,13 @@ this MSI model validation. Their scenario counts are not MSI coverage.
 - [ ] **T6:** real DMA ledger for address/size limits, partial Map/Unmap/FreeBuffer
   failures, pending protocol attributes and complete retention. Keep every
   firmware-visible address/handle valid until cleanup is proven safe.
-  The current aggregate mock does not model individual partial firmware cleanup.
-  Validate returned mapping length and actual file bounds/digests before unsafe
-  DMA copies; build-time asset verification alone cannot establish these.
+  **Host substep complete:** per-resource states, sizes/addresses/tokens,
+  full returned mapping coverage, uncertain/partial effects, stop-on-cleanup-error,
+  tombstones, pending/reentrant attempts and stock history are modeled/tested.
+  See the [DMA model](../windows/ad103m-msi-ge78hx/port/README.md#per-resource-dma-model--2026-10-28).
+  There is still no native service binding, real quiescence/addressability proof,
+  protocol-attribute journal or firmware qualification. Actual file bounds/digests
+  before unsafe copies remain P5; build-time verification does not establish them.
 - [ ] **T7:** legal UEFI TPL/events/reentrancy rules for every operation.
   Our atomic epoch/commit is CPU-only and differs from the reference ordering.
   A token or blanket RaiseTPL does not prove FreeBuffer/CloseProtocol/StartImage
