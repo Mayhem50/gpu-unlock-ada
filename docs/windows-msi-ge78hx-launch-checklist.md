@@ -3,8 +3,9 @@
 Updated 2026-10-28 after the host DMA/timing work and UEFI feasibility review. This is a gate register,
 not an execution packet. Checked means the stated evidence exists, not that
 the machine is qualified for unlock. Open items block the relevant next stage.
-Current scope: repository review and CPU tests only; no GPU queries, EFI launch,
-adapter preparation, unlock, USB update or boot-protection change.
+Current scope: source/CPU validation and preparation of the separate Stage A
+stock Windows handoff application. No EFI launch, GPU query/mutation, GPU unlock
+adapter, unlock or boot-protection change. Stage A does not detach/reset the GPU.
 
 See the [method alignment review](windows-msi-ge78hx-method-alignment.md).
 A complete checklist is not a completed checklist or a guarantee of recovery.
@@ -144,6 +145,17 @@ this MSI model validation. Their scenario counts are not MSI coverage.
   terminal_required is a result flag, not that implementation.
 
 ## 4. Separate stock release/reset/Windows tests — no unlock
+
+- [x] **A0 software only:** separate [Stage A stock handoff](../windows/ad103m-msi-ge78hx/stock-handoff/README.md)
+  built with the real adapter under 59 fake-UEFI cases / 1,909 assertions,
+  plus native PE/source/header verification. No GPU protocols, payload, reset,
+  DMA or file-write route. Explicit W only; timeout aborts.
+- [ ] **A1:** confirm actual ESP bytes (non-admin direct read was denied;
+  authenticated Windows servicing copy is the provisional strict runtime pin),
+  current security/recovery state and exact USB/binary. No firmware execution
+  has occurred. Staging refuses pending fingerprint confirmation.
+- [ ] **A2:** manually demonstrate normal Windows handoff/display/input.
+  This is not the release/reset test below and cannot close T2/T5–T9 or V1–V4.
 
 - [ ] **V1:** explicit stock/no-unlock mode and stock postconditions.
   Current synthetic unlocked-selector success flow is not this test.

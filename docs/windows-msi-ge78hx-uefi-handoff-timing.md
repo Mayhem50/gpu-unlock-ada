@@ -4,6 +4,11 @@
 query, benchmark, EFI build/launch, native adapter, USB deployment or protection
 change in this work. This document is not an executable hardware test packet.
 
+Subsequently, a separate [Stage A stock-only handoff application](../windows/ad103m-msi-ge78hx/stock-handoff/README.md)
+was prepared. It has no GPU ownership/DMA/reset transaction and does not
+implement the critical GPU handoff described here or close T7. Its own
+confirmation/deployment/physical-test state is tracked separately.
+
 ## Result
 
 A continuous `RaiseTPL`-only implementation of our abstract final commit is

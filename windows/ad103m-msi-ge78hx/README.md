@@ -12,17 +12,23 @@ System BIOS: E17S1IMS.114
 ```
 
 The read-only EFI diagnostic is implemented and compiled under diagnostic/.
-There is no unlock payload, VBIOS image, installer or boot registration command.
+There is no unlock payload, VBIOS image or boot registration command.
 The probe writes logs only to its own USB source. Captures 3/4 were executed
 manually by the user; no new probe deployment or launch is part of current work.
 The [offline port prototype](port/README.md) models MSI release, reset and
 Windows handoff against CPU mocks derived from captures 3 and 4. It is not
 bootable and does not contain an executable unlock backend.
+The separate [Stage A stock handoff](stock-handoff/README.md) is now built for
+a first normal Windows boot test: it has no GPU protocols, DMA, release/reset
+or unlock. Its USB staging helper is gated on the actual ESP fingerprint and
+verified removable-media identity. It has not been executed on firmware;
+the current provisional profile awaits direct ESP fingerprint confirmation.
 `build/`, `local/`, and `captures/` are
 ignored because captures can include proprietary firmware and machine-specific
 data.
 
-Current validation is CPU-only; use the port README for that build/test command.
+GPU-port validation remains CPU-only; Stage A has its own host/PE checks.
+Use each component's README for its build/test command.
 The host baseline collector below is a reference for a later authorized idle
 GPU session, and is not run as part of an offline review:
 
