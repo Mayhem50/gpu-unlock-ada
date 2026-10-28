@@ -19,7 +19,7 @@ def ownership(data):
     role_sets={i:[r for r in ROLES if platform.get(r)==i] for i in nodes}
     drivers={}
     driver_rejections=[]
-    for agent in platform.get('gpu_agents',[]):
+    for agent in platform.get('gpu_agents',[])+platform.get('boundary_agents',[]):
         code=agent.get('code') or {}
         raw=code.get('hex')
         reason=None
@@ -66,7 +66,10 @@ def ownership(data):
                     path.endswith('7fff0400') and path.startswith(target_path[:-8]))
     gpu_nodes={i for i,h in nodes.items() if i==target or descendant(h.get('path'))}
     role_nodes={platform.get(r) for r in ROLES}
-    related=gpu_nodes|role_nodes|set(drivers)
+    # Boundary identities can label endpoints without expanding the original
+    # direct boundary into all unrelated neighbors of those external agents.
+    gpu_drivers={a.get('agent') for a in platform.get('gpu_agents',[]) if a.get('agent') in drivers}
+    related=gpu_nodes|role_nodes|gpu_drivers
     scopes={s:{'edges':[],'unresolved':[],'edge_count':0} for s in ('global','gpu','boundary')}
     for h in handles:
         for edge in h['active_opens']:

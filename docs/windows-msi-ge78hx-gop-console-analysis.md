@@ -94,3 +94,48 @@ establish actual driver detach, FLR and Windows recovery.
 
 The current comparison proves agreement of observed GPU-source relationships,
 not isolation, safe release, or unlock support.
+
+## Read-only boundary collection preparation — 2026-10-28
+
+The existing captures were revalidated offline against their individual build
+IDs. Their five GPU-source relationships still compare equal, and the three
+boundary identities remain unknown. No additional identity can be recovered
+from their existing contents by changing a comparison rule.
+
+The diagnostic source now also selects agents of incoming active relationships
+whose controller is the target PCI handle or one of the non-null system console
+roots. These are the three missing relationships in the actual captures. It
+records their existing DriverBinding/LoadedImage metadata and bounded code
+sample in an optional `boundary_agents` array. Selection is based on raw live
+relationships, not hard-coded capture handle numbers. It invokes no driver
+callback and does not stop a driver or claim a protocol. Unrelated external
+agents are excluded; repeated agents are captured once, including deduplication
+against GPU agents. At most 32 boundary agents are selected. GPU identities are
+serialized first; the original aggregate 1 MiB code budget is shared. Exhausted
+budget or missing/invalid binding/image/code leaves identity unverified, not
+approved. Graph completeness does not imply complete identity capture.
+
+The comparator validates these optional identity records by the same code,
+digest, binding and ambiguity rules as GPU records. It keeps the original
+direct-boundary scope: identifying a root-bridge driver does not automatically
+pull all its unrelated children into the GPU boundary. Boundary code changes
+can fail their own comparison even when GPU driver code still matches. Older
+captures without the new array retain their previous unknown result.
+
+Validation: 7,925 application checks, 309 platform PE/ownership checks and 44
+Python tests pass. New cases cover target/console incoming owners, unrelated
+owners, null controller/console handles, shared/repeated agents and unavailable
+bindings; comparator tests cover handle permutation, corrupt/relocated/unbound
+code, duplicate identities and independent boundary drift. Pure identity tests
+and the supplementary read-only PE/source verifier also pass.
+
+**Source preparation only:** no new diagnostic EFI was built, staged or run.
+The existing diagnostic remains SHA256
+`18efed6c4a60ce0ae682fb9c9d165f425c280a2159e32f57124f8cf3c41703f9`;
+it does not contain this extension. Its old manifest must not be presented as
+provenance for the changed sources. The separate Stage A binary is unchanged.
+
+This extension alone is not a complete next capture packet. Virtual console
+function-pointer/code provenance, USB/logging dependencies and relevant service
+callbacks are still missing. No Stop behavior, notification exclusion, reset
+or recovery is established. P2 and T7 remain open; no release adapter is enabled.

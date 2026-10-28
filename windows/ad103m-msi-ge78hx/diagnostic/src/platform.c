@@ -15,6 +15,7 @@ static EFI_GUID PathId=EFI_DEVICE_PATH_PROTOCOL_GUID;
 static EFI_GUID DriverId=EFI_DRIVER_BINDING_PROTOCOL_GUID;
 static EFI_GUID ImageId=EFI_LOADED_IMAGE_PROTOCOL_GUID;
 static EFI_HANDLE Agents[MAX_AGENTS];
+static EFI_HANDLE BoundaryAgents[MAX_AGENTS];
 
 static BOOLEAN Range(UINTN n,UINTN at,UINTN size) {return at<=n&&size<=n-at;}
 BOOLEAN LoadedCodeView(const UINT8 *p,UINTN n,CODE_VIEW *out) {
@@ -97,7 +98,7 @@ static void Driver(TEXT *t,EFI_BOOT_SERVICES *bs,EFI_HANDLE agent,EFI_HANDLE *ha
     else TextPut(t,"null");TextPut(t,"}}");
 }
 void SamplePlatform(TEXT *t,EFI_SYSTEM_TABLE *st,EFI_HANDLE target) {
-    EFI_BOOT_SERVICES *bs=st?st->BootServices:NULL;EFI_HANDLE *handles=NULL;UINTN count=0,i,edges=0,agents=0,budget=CODE_BUDGET;
+    EFI_BOOT_SERVICES *bs=st?st->BootServices:NULL;EFI_HANDLE *handles=NULL;UINTN count=0,i,edges=0,agents=0,boundary_agents=0,budget=CODE_BUDGET;
     UINTN target_n=0;UINT8 *target_path;BOOLEAN complete=TRUE,first=TRUE;EFI_STATUS status;
     if(!bs||!target||!bs->LocateHandleBuffer||!bs->HandleProtocol||!bs->FreePool||
        !bs->ProtocolsPerHandle||!bs->OpenProtocolInformation) {TextPut(t,"{\"available\":false,\"complete\":false}");return;}
@@ -142,6 +143,16 @@ void SamplePlatform(TEXT *t,EFI_SYSTEM_TABLE *st,EFI_HANDLE target) {
                 if(related&&info[k].AgentHandle&&Index(Agents,agents,info[k].AgentHandle)==MAX_UINTN) {
                     if(agents<MAX_AGENTS)Agents[agents++]=info[k].AgentHandle;else complete=FALSE;
                 }
+                /* Direct incoming owners of the GPU or system console roots.
+                 * Do not follow every global pathless driver, or assume these
+                 * boundary drivers may be stopped. Missing identities remain
+                 * explicit in Driver's result and the offline comparator. */
+                if(!related&&info[k].AgentHandle&&info[k].ControllerHandle&&
+                   (info[k].ControllerHandle==target||info[k].ControllerHandle==st->ConsoleOutHandle||
+                    info[k].ControllerHandle==st->ConsoleInHandle||info[k].ControllerHandle==st->StandardErrorHandle)&&
+                   Index(BoundaryAgents,boundary_agents,info[k].AgentHandle)==MAX_UINTN) {
+                    if(boundary_agents<MAX_AGENTS)BoundaryAgents[boundary_agents++]=info[k].AgentHandle;else complete=FALSE;
+                }
             }
             if(info&&EFI_ERROR(bs->FreePool(info)))complete=FALSE;
         }
@@ -150,6 +161,14 @@ void SamplePlatform(TEXT *t,EFI_SYSTEM_TABLE *st,EFI_HANDLE target) {
     }
     TextPut(t,"],\"gpu_agents\":[");
     for(i=0;i<agents;i++){if(i)TextPut(t,",");Driver(t,bs,Agents[i],handles,count,&budget);}
+    TextPut(t,"],\"boundary_agents\":[");first=TRUE;
+    for(i=0;i<boundary_agents;i++) {
+        /* The same agent can open both a GPU source and an external source.
+         * Capture its identity once; local handle numbers are never identity. */
+        if(Index(Agents,agents,BoundaryAgents[i])!=MAX_UINTN)continue;
+        if(!first)TextPut(t,",");first=FALSE;
+        Driver(t,bs,BoundaryAgents[i],handles,count,&budget);
+    }
     TextPut(t,"],\"edge_count\":");TextDec(t,edges);
     TextPut(t,",\"complete\":");TextPut(t,complete?"true":"false");
     TextPut(t,",\"atomic_snapshot\":false,\"release_authorized\":false}");

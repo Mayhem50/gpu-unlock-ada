@@ -12,6 +12,7 @@ static UINT8 Pe[4096],Parent[]={1,1,6,0,0,1,0x7f,0xff,4,0};
 static UINT8 Child[]={1,1,6,0,0,1,2,3,8,0,0,0,0,0,0x7f,0xff,4,0};
 static EFI_GUID DriverGuid=EFI_DRIVER_BINDING_PROTOCOL_GUID,LoadedGuid=EFI_LOADED_IMAGE_PROTOCOL_GUID,PathGuid=EFI_DEVICE_PATH_PROTOCOL_GUID,DummyGuid={1,2,3,{4}};
 static EFI_DRIVER_BINDING_PROTOCOL Binding;
+static EFI_DRIVER_BINDING_PROTOCOL BoundaryBinding;
 static EFI_LOADED_IMAGE_PROTOCOL Image;
 static EFI_HANDLE H(UINTN n){return (EFI_HANDLE)n;}
 static VOID Put16(UINTN at,UINT16 v){Pe[at]=(UINT8)v;Pe[at+1]=(UINT8)(v>>8);}
@@ -33,6 +34,7 @@ static EFI_STATUS EFIAPI Handle(EFI_HANDLE h,EFI_GUID *guid,VOID **out) {
     if(BytesEqual(guid,&PathGuid,16)) {
         if(h==H(1))*out=Parent;else if(h==H(2))*out=Child;
     } else if(h==H(3)&&BytesEqual(guid,&DriverGuid,16))*out=&Binding;
+    else if(h==H(4)&&Mode>=4&&Mode!=8&&BytesEqual(guid,&DriverGuid,16))*out=&BoundaryBinding;
     else if(h==H(3)&&BytesEqual(guid,&LoadedGuid,16))*out=&Image;
     return *out?EFI_SUCCESS:EFI_UNSUPPORTED;
 }
@@ -47,6 +49,14 @@ static EFI_STATUS EFIAPI Opens(EFI_HANDLE h,EFI_GUID *guid,EFI_OPEN_PROTOCOL_INF
         (*out)[0].AgentHandle=H(3);(*out)[0].ControllerHandle=h;
         (*out)[0].Attributes=EFI_OPEN_PROTOCOL_BY_DRIVER;(*out)[0].OpenCount=1;
         if(*n==2){(*out)[1]=(*out)[0];(*out)[1].ControllerHandle=H(2);(*out)[1].Attributes=EFI_OPEN_PROTOCOL_BY_CHILD_CONTROLLER;}
+    }
+    if(h==H(4)&&Mode>=4) {
+        *n=Mode==9?2:1;*out=calloc(*n,sizeof(**out));CHECK(*out);
+        (*out)[0].AgentHandle=Mode==7?H(3):H(4);
+        (*out)[0].ControllerHandle=Mode==4?H(1):Mode==6?H(3):H(2);
+        if(Mode==10)(*out)[0].ControllerHandle=NULL;
+        (*out)[0].Attributes=EFI_OPEN_PROTOCOL_BY_CHILD_CONTROLLER;(*out)[0].OpenCount=1;
+        if(*n==2)(*out)[1]=(*out)[0];
     }
     return EFI_SUCCESS;
 }
@@ -67,6 +77,8 @@ static void TestGraph(void) {
     SetupPe();memset(&Binding,0,sizeof(Binding));memset(&Image,0,sizeof(Image));
     Binding.DriverBindingHandle=Binding.ImageHandle=H(3);Binding.Version=0x6000b;
     Binding.Stop=(EFI_DRIVER_BINDING_STOP)(UINTN)(Pe+0x208);Image.ImageBase=Pe;Image.ImageSize=sizeof(Pe);
+    BoundaryBinding=Binding;BoundaryBinding.DriverBindingHandle=H(4);
+    BoundaryBinding.Stop=(EFI_DRIVER_BINDING_STOP)(UINTN)(Pe+0x209);
     Image.ImageCodeType=EfiBootServicesCode;Image.DeviceHandle=H(1);Image.FilePath=(EFI_DEVICE_PATH_PROTOCOL *)Parent;
     bs.LocateHandleBuffer=Locate;bs.HandleProtocol=Handle;bs.FreePool=Free;bs.ProtocolsPerHandle=Protocols;bs.OpenProtocolInformation=Opens;
     for(Mode=0;Mode<4;Mode++) {
@@ -80,5 +92,18 @@ static void TestGraph(void) {
     Mode=0;st.ConsoleInHandle=H(99);
     TextInit(&t,data,sizeof(data));SamplePlatform(&t,&st,H(1));
     CHECK(strstr(data,"\"complete\":false"));
+    st.ConsoleInHandle=H(2);
+    for(Mode=4;Mode<=10;Mode++) {
+        if(Mode==10)st.ConsoleInHandle=st.ConsoleOutHandle=st.StandardErrorHandle=NULL;
+        TextInit(&t,data,sizeof(data));SamplePlatform(&t,&st,H(1));CHECK(!t.failed);
+        CHECK(strstr(data,"\"release_authorized\":false"));
+        if(Mode==6||Mode==7||Mode==10)CHECK(strstr(data,"\"boundary_agents\":[]"));
+        else {
+            CHECK(strstr(data,"\"boundary_agents\":[{\"agent\":3,"));
+            if(Mode==8)CHECK(strstr(data,"\"boundary_agents\":[{\"agent\":3,\"binding_status\":\"0x8000000000000003\"}"));
+            else CHECK(strstr(data,"\"stop_rva\":\"0x0000000000000209\""));
+            if(Mode==9)CHECK(!strstr(strstr(data,"\"boundary_agents\":"),"},{"));
+        }
+    }
 }
 int main(void){TestPe();TestGraph();printf("PASS: %u platform PE/ownership checks; read-only host mocks.\n",Checks);return 0;}

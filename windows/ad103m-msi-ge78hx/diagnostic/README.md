@@ -1,8 +1,11 @@
 # MSI GE78HX read-only UEFI probe
 
 Prepared offline for PCI 10DE:2717 / 1462:13CD / revision A1. This is a
-diagnostic build with no unlock code or NVIDIA firmware linked. It has not
-been executed in UEFI or qualified on hardware.
+diagnostic build with no unlock code or NVIDIA firmware linked. The operator
+executed previous versions for captures 3/4. Current source includes a new
+boundary-identity collection extension tested only with host mocks; no EFI
+containing that extension has been built, staged or run. It is not qualified
+for driver release, reset or unlock.
 
 From the repository root:
 
@@ -20,8 +23,8 @@ PCI devices, GOP paths, console variables and the active protocol graph.
 MMIO reads require the exact PCI identity, BDF 0000:01:00.0, memory decode
 already enabled, BME already disabled, and a consistent BAR descriptor large
 enough for the fixed read allowlist. It never changes those states. The first
-chip read must equal 0x193000a1 (an expected AD103-family value, not yet observed
-on this machine), or further sampling stops. A mismatch is diagnostic failure,
+chip read must equal 0x193000a1 (also observed in captures 3/4), or further
+sampling stops. A mismatch is diagnostic failure,
 not permission to change this expectation without review.
 
 The PROM window is bounded to 1 MiB at BAR0+0x300000. A complete window is not
@@ -45,6 +48,12 @@ Use --manifest to select the manifest for those exact captures. Build IDs,
 data lengths, target identity and supplied firmware/code digests are checked.
 Graph IDs are normalized by unique device paths. Unresolvable graph nodes and
 relocated driver code produce an unknown result, never a passing comparison.
+The prepared optional `boundary_agents` capture selects direct incoming owners
+of the GPU and non-null console roots, separately from GPU-source agents. Their
+code receives the same identity checks; missing data stays unknown. The capture
+budget is bounded and shared. This does not identify virtual console callbacks,
+prove driver-stop behavior or authorize any release. See the
+[offline analysis and validation](../../../docs/windows-msi-ge78hx-gop-console-analysis.md).
 GOP parents, active console associations, console paths and ConIn/ConOut
 variables are compared separately as topology_matches. Array/handle ordering
 is normalized. Empty complete graphs or inconsistent target references are

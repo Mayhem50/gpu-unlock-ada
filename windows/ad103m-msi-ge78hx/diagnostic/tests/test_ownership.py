@@ -47,8 +47,9 @@ def permuted(data):
         for e in h['active_opens']:
             for field in ('agent','controller'):e[field]=remap[e[field]]
     for field in ('target','conout','conin','stderr'):p[field]=remap[p[field]]
-    for a in p['gpu_agents']:
-        for field in ('agent','image_handle','source_handle'):a[field]=remap[a[field]]
+    for name in ('gpu_agents','boundary_agents'):
+        for a in p.get(name,[]):
+            for field in ('agent','image_handle','source_handle'):a[field]=remap[a[field]]
     return data
 
 
@@ -115,6 +116,64 @@ class OwnershipTests(unittest.TestCase):
         r=compare(data,permuted(data))
         self.assertTrue(r['graph_matches'])
         self.assertTrue(r['boundary_ownership_matches'])
+
+    def test_captured_boundary_code_resolves_owner_without_changing_gpu_code_scope(self):
+        data=fixture();p=data['platform']
+        boundary=copy.deepcopy(p['gpu_agents'][0])
+        boundary.update(agent=6,image_handle=6,file_path='0404beef',stop_rva='0x00000100')
+        p['boundary_agents']=[boundary]
+        other=permuted(data)
+        r=compare(data,other)
+        self.assertTrue(r['boundary_ownership_matches'])
+        self.assertTrue(r['gpu_ownership_matches'])
+        self.assertTrue(r['driver_code_matches'])
+        self.assertFalse(r['unlock_ready'])
+        self.assertFalse(r['ownership_diagnostics']['release_authorized'])
+
+    def test_unverified_boundary_capture_does_not_resolve_owner(self):
+        for bad in ('missing_code','relocated','wrong_digest','binding_mismatch'):
+            with self.subTest(bad=bad):
+                data=fixture();a=copy.deepcopy(data['platform']['gpu_agents'][0])
+                a.update(agent=6,image_handle=6,file_path='0404beef')
+                if bad=='missing_code':a['code']=None
+                if bad=='relocated':a['code']['relocations_in_code']=1
+                if bad=='wrong_digest':a['code']['loaded_sha256']='0'*64
+                if bad=='binding_mismatch':a['binding_handle_matches']=False
+                data['platform']['boundary_agents']=[a]
+                r=compare(data,data)
+                self.assertIsNone(r['boundary_ownership_matches'])
+                self.assertTrue(r['gpu_ownership_matches'])
+
+    def test_boundary_identity_change_is_detected_independently_of_gpu_code(self):
+        data=fixture();a=copy.deepcopy(data['platform']['gpu_agents'][0])
+        a.update(agent=6,image_handle=6,file_path='0404beef')
+        data['platform']['boundary_agents']=[a]
+        other=copy.deepcopy(data);other['platform']['boundary_agents'][0]['version']='0x00000011'
+        r=compare(data,other)
+        self.assertFalse(r['boundary_ownership_matches'])
+        self.assertTrue(r['gpu_ownership_matches'])
+        self.assertTrue(r['driver_code_matches'])
+
+    def test_duplicate_identity_across_capture_scopes_is_not_a_unique_anchor(self):
+        data=fixture();a=copy.deepcopy(data['platform']['gpu_agents'][0])
+        a.update(agent=6,image_handle=6)
+        data['platform']['boundary_agents']=[a]
+        r=compare(data,data)
+        self.assertIsNone(r['boundary_ownership_matches'])
+        self.assertIsNone(r['gpu_ownership_matches'])
+
+    def test_boundary_code_does_not_expand_scope_to_unrelated_neighbors(self):
+        data=fixture();a=copy.deepcopy(data['platform']['gpu_agents'][0])
+        a.update(agent=6,image_handle=6,file_path='0404beef')
+        p=data['platform'];p['boundary_agents']=[a]
+        p['handles'].append(dict(id=8,path=None,active_opens=[dict(
+            agent=6,controller=8,protocol='66'*16,attributes='0x00000010',count=1)]))
+        p['handle_count']=9;p['edge_count']=7
+        r=compare(data,data)
+        diag=r['ownership_diagnostics']['left']
+        self.assertEqual(diag['scope_counts']['boundary']['edges'],1)
+        self.assertTrue(r['boundary_ownership_matches'])
+        self.assertIsNone(r['graph_matches'])
 
     def test_changed_edge_multiplicity_is_detected(self):
         data=fixture();other=copy.deepcopy(data)

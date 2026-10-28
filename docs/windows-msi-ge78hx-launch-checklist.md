@@ -83,6 +83,11 @@ this MSI model validation. Their scenario counts are not MSI coverage.
 - [ ] **P2:** resolve the three relevant external owners (root bridge, keyboard,
   pointer) and actual console interface/callback/code identities. Do not demand
   resolution of unrelated global edges or use raw handle IDs as identity.
+  Incoming-boundary identity collection is now prepared in diagnostic source
+  and fake-service tests (309 platform checks; 44 Python tests). No new EFI was
+  built/deployed/executed. Existing captures still lack these identities;
+  console callback and USB/logging dependencies remain open. See the
+  [boundary collection preparation](windows-msi-ge78hx-gop-console-analysis.md#read-only-boundary-collection-preparation--2026-10-28).
 - [ ] **P3:** bind exclusive PCI I/O interface, protocol IO/MEM/BME attributes,
   logical BAR descriptors and hardware command consistently. Review any status
   exception independently instead of widening admission masks.

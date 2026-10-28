@@ -21,6 +21,19 @@ class PrivateOwnershipTests(unittest.TestCase):
             data=json.loads(path.read_text(encoding='utf-8-sig'))
             manifest=json.loads((folder/'MANIFEST.json').read_text(encoding='utf-8-sig'))
             analyze(data,manifest['build_id']);captures.append(data)
+            # The prepared collection predicate reaches exactly the missing
+            # direct owners; it must not depend on their snapshot-local IDs.
+            p=data['platform']
+            roots={p[k] for k in ('target','conout','conin','stderr')}
+            gpu_agents={a['agent'] for a in p['gpu_agents']}
+            selected={e['agent'] for h in p['handles'] if not h['gpu_descendant']
+                      for e in h['active_opens'] if e['controller'] is not None
+                      and e['controller'] in roots and e['agent'] is not None}-gpu_agents
+            self.assertEqual(len(selected),3)
+            from graph import ownership
+            unknown={m['handle'] for edge in ownership(data)['scopes']['boundary']['unresolved']
+                     for m in edge['missing'] if m['endpoint']=='agent'}
+            self.assertEqual(selected,unknown)
         r=compare(*captures)
         self.assertTrue(r['gpu_ownership_matches'])
         self.assertTrue(r['physical_gop_matches'])
