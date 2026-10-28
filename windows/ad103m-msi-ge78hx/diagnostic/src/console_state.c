@@ -152,6 +152,18 @@ void CsCapture(CS_CAPTURE *c,EFI_SYSTEM_TABLE *st,EFI_HANDLE *handles,UINTN coun
     for(UINTN i=0;i<4;i++)c->interface_equal[i]=(BOOLEAN)((c->interface_masks[0]&((UINTN)1<<i))&&(c->interface_masks[1]&((UINTN)1<<i))&&BytesEqual(c->words[0][i],c->words[1][i],c->word_count[i]*8));
     Sha256((UINT8 *)c->image_base+0x2a0,19648,hash);
     if(!BytesEqual(hash,CodeHash,32)){c->reason="console_code_changed";return;}
+    /* Re-query all optional protocols before the final map. A failed query,
+     * replacement, removal or new appearance invalidates the observation. */
+    for(UINTN i=0;i<4;i++) {
+        VOID *p=NULL;EFI_STATUS s=bs->HandleProtocol(c->roots[0],&ids[i],&p);
+        c->revalidated_mask|=(UINTN)1<<i;c->revalidated_status[i]=s;
+        c->revalidated_interfaces[i]=s==EFI_SUCCESS?(UINTN)p:0;
+        if(c->violation){c->reason="reentry_refused";return;}
+        if(s!=c->interface_status[i] || (s==EFI_SUCCESS&&(UINTN)p!=c->interfaces[i])) {
+            c->reason="input_protocol_changed";return;
+        }
+    }
+    c->interfaces_revalidated=TRUE;
     if(!Map(c,bs,1)){c->reason="final_memory_map_failed";return;}
     c->map_equal=(BOOLEAN)(c->keys[0]==c->keys[1]&&c->sizes[0]==c->sizes[1]&&c->strides[0]==c->strides[1]&&
         BytesEqual(c->maps[0].bytes,c->maps[1].bytes,c->sizes[0]));
@@ -185,11 +197,15 @@ void CsJson(TEXT *t,const CS_CAPTURE *c) {
     TextPut(t,",\"image_bytes\":");TextDec(t,c->image_bytes);
     TextPut(t,",\"image_pinned\":");TextPut(t,c->pinned?"true":"false");
     TextPut(t,",\"active_console_binding_verified\":");TextPut(t,c->binding_verified?"true":"false");
+    TextPut(t,",\"input_interfaces_revalidated\":");TextPut(t,c->interfaces_revalidated?"true":"false");
     TextPut(t,",\"candidate_diagnostics\":{\"candidates\":");TextDec(t,c->candidate_count);TextPut(t,",\"ram_readable\":");TextDec(t,c->ram_candidates);TextPut(t,",\"path_matches\":");TextDec(t,c->path_matches);TextPut(t,",\"code_matches\":");TextDec(t,c->code_matches);TextPut(t,"}");
     TextPut(t,",\"memory_maps\":[");
     for(unsigned i=0;i<2;i++) {
+        UINT8 digest[32];
         if(i)TextPut(t,",");TextPut(t,"{\"status\":");if(c->map_called[i])TextHex(t,c->map_status[i],16);else TextPut(t,"null");
-        TextPut(t,",\"bytes\":");TextDec(t,c->sizes[i]);TextPut(t,",\"descriptor_size\":");TextDec(t,c->strides[i]);TextPut(t,",\"version\":");TextDec(t,c->versions[i]);TextPut(t,"}");
+        TextPut(t,",\"bytes\":");TextDec(t,c->sizes[i]);TextPut(t,",\"descriptor_size\":");TextDec(t,c->strides[i]);TextPut(t,",\"version\":");TextDec(t,c->versions[i]);
+        TextPut(t,",\"key\":");if(c->map_called[i]&&c->map_status[i]==EFI_SUCCESS)TextHex(t,c->keys[i],16);else TextPut(t,"null");
+        TextPut(t,",\"sha256\":");if(c->map_called[i]&&c->map_status[i]==EFI_SUCCESS&&c->sizes[i]<=CS_MAP_CAP){Sha256(c->maps[i].bytes,c->sizes[i],digest);TextBytes(t,digest,32);}else TextPut(t,"null");TextPut(t,"}");
     }
     TextPut(t,"]");
     TextPut(t,",\"slots_complete\":");TextPut(t,c->slots_complete?"true":"false");
@@ -206,6 +222,8 @@ void CsJson(TEXT *t,const CS_CAPTURE *c) {
     for(UINTN i=0;i<4;i++) {
         if(i)TextPut(t,",");TextPut(t,"{\"kind\":\"");TextPut(t,names[i]);TextPut(t,"\",\"status\":");if(c->queried_mask&((UINTN)1<<i))TextHex(t,c->interface_status[i],16);else TextPut(t,"null");
         TextPut(t,",\"interface\":");TextHex(t,c->interfaces[i],16);
+        TextPut(t,",\"revalidated_status\":");if(c->revalidated_mask&((UINTN)1<<i))TextHex(t,c->revalidated_status[i],16);else TextPut(t,"null");
+        TextPut(t,",\"revalidated_interface\":");if(c->revalidated_mask&((UINTN)1<<i))TextHex(t,c->revalidated_interfaces[i],16);else TextPut(t,"null");
         TextPut(t,",\"ram_read\":");TextPut(t,c->interface_read[i]?"true":"false");
         TextPut(t,",\"two_reads_equal\":");TextPut(t,c->interface_equal[i]?"true":"false");
         TextPut(t,",\"raw_words\":[");if(c->interface_read[i])for(UINTN j=0;j<c->word_count[i];j++){if(j)TextPut(t,",");TextHex(t,c->words[0][i][j],16);}TextPut(t,"]");

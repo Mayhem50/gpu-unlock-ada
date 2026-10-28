@@ -24,6 +24,9 @@ callback records. Selection is semantic, never snapshot-local image number 320:
 4. Record registered input interfaces on the console input root: SimpleTextIn,
    SimpleTextInputEx and raw four-word views of SimplePointer/AbsolutePointer
    where present. No method on these interfaces is invoked.
+   All four protocol statuses and pointers are queried again before the final
+   memory map; replacement, removal or appearance makes the result incomplete.
+   The JSON retains both sets of statuses/pointers for offline cross-checking.
 
 Slot meanings remain audit labels for raw bytes, not a certified driver
 structure or a source-patching recipe. Null/zero is retained when read; an
@@ -53,6 +56,9 @@ then active bindings, code and current slot/interface values are rechecked
 without another firmware service call. Map/code/binding/state drift is retained
 as incomplete. These checks detect observed drift; they are **not an atomic
 snapshot, a lock or a proof of future lifetime**.
+The second protocol query precedes the final GetMemoryMap; a callback in that
+service could still change an interface afterward. Re-querying in a loop cannot
+establish continuous exclusion. Event and release qualification remain open.
 
 Each collection context is single-use, consumed before service callbacks.
 Recursive/repeated entry latches a violation and cannot produce a complete
@@ -98,12 +104,12 @@ profile, but **was not run** in this preparation.
 
 CPU results:
 
-- **24 collector cases / 86 checks**, including exact profile/path/code rejection,
+- **29 collector cases / 101 checks**, including exact profile/path/code rejection,
   duplicate image, map-buffer/stride/type/cache/read-protection failures,
   descriptor overlap/gap/wrap, reentry/replay, final map/code/state/binding drift,
   missing optional InputEx and opaque tokens deliberately equal to unreadable
   addresses. No token or captured method is executed.
-- **74 Python tests**, including every missing/partial/mutated raw slot,
+- **75 Python tests**, including every missing/partial/mutated raw slot,
   incorrect wait cookie, pointer-layout overinterpretation, profile/flag drift,
   old captures without the field and rejection of actual synthetic C JSON.
 - Existing **7,925 application / 722 platform** checks, pure identity and
@@ -113,6 +119,11 @@ The parser distinguishes raw state observation from event knowledge and always
 keeps release/quiescence permission false. Historical captures are not modified
 or filled with synthesized new state. A report for a refusal may contain partial
 bytes with explicit validity; it is not a usable full-state observation.
+It independently compares map status/geometry/key/digest, candidate counts,
+the verified dependency image and callback RVAs, input binding and the two
+protocol query results. The regression fixture uses private capture 6 when
+available and is explicitly skipped when that capture is absent; synthetic
+samples do not authenticate a hardware capture.
 
 ## Artifact boundary
 
