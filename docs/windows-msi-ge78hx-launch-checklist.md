@@ -1,6 +1,6 @@
 # MSI GE78HX: evidence and validation checklist
 
-Updated 2026-10-27 after the host FBPA/readout and lifecycle-ownership changes. This is a gate register,
+Updated 2026-10-28 after the nv-uefi-unlocker v0.2.0 source audit. This is a gate register,
 not an execution packet. Checked means the stated evidence exists, not that
 the machine is qualified for unlock. Open items block the relevant next stage.
 Current scope: repository review and CPU tests only; no GPU queries, EFI launch,
@@ -8,6 +8,12 @@ adapter preparation, unlock, USB update or boot-protection change.
 
 See the [method alignment review](windows-msi-ge78hx-method-alignment.md).
 A complete checklist is not a completed checklist or a guarantee of recovery.
+
+External comparison: [nv-uefi-unlocker v0.2.0 audit](windows-msi-ge78hx-nv-uefi-v020-audit.md).
+The ASUS success report does not close native gates. The pinned source drops
+its exclusive claim before the transaction, ignores partial DMA cleanup errors,
+permits repeated reset paths and performs reconnect/OS discovery after GPU checks.
+It does not admit this MSI's 2717 ID. No external code was integrated.
 
 ## 0. Historical evidence and present-state limits
 
@@ -112,6 +118,9 @@ this MSI model validation. Their scenario counts are not MSI coverage.
 - [ ] **T6:** real DMA ledger for address/size limits, partial Map/Unmap/FreeBuffer
   failures, pending protocol attributes and complete retention. Keep every
   firmware-visible address/handle valid until cleanup is proven safe.
+  The current aggregate mock does not model individual partial firmware cleanup.
+  Validate returned mapping length and actual file bounds/digests before unsafe
+  DMA copies; build-time asset verification alone cannot establish these.
 - [ ] **T7:** legal UEFI TPL/events/reentrancy rules for every operation.
   Our atomic epoch/commit is CPU-only and differs from the reference ordering.
   A token or blanket RaiseTPL does not prove FreeBuffer/CloseProtocol/StartImage

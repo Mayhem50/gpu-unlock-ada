@@ -1,0 +1,222 @@
+{
+  "audit_date": "2026-10-28",
+  "source_repository": "physicsdolphin/nv-uefi-unlocker",
+  "tag": "v0.2.0",
+  "commit": "d82bb38c09709be40d106d9569740b457692f873",
+  "release_published_at": "2026-10-27T07:59:22Z",
+  "release_asset_metadata_only": {
+    "name": "BOOTX64.EFI",
+    "bytes": 215552,
+    "digest": "sha256:6788aa5a799f8c931714aecd3e86e93a8e33525059edf82cdde00f603e99a321"
+  },
+  "binary_downloaded": false,
+  "binary_audited": false,
+  "reproducible_build_verified": false,
+  "third_party_code_executed": false,
+  "files": [
+    {
+      "path": ".cargo/config.toml",
+      "git_blob_sha1": "1751559e117a406b9a458a99612e1cda7f08ce55",
+      "bytes": 449,
+      "sha256": "0103cc3f7ffc9a37541bad10a0949fd6242412f0f7cf3d0aca57a80189c8bccb"
+    },
+    {
+      "path": "Cargo.lock",
+      "git_blob_sha1": "1fc91aa2a7257205debfb28de4493d5b52371f39",
+      "bytes": 10866,
+      "sha256": "1978fdbd454196de940112e18acb73df142344c6ca549da104a2580438c0a69b"
+    },
+    {
+      "path": "Cargo.toml",
+      "git_blob_sha1": "3171ec2e38486f9c4eefa4df5995fb7d763a6d23",
+      "bytes": 421,
+      "sha256": "109104b267093ffdcc6d99f8a01b344f54c53d6d0635e6f2554d1a4588e39237"
+    },
+    {
+      "path": "README.en.md",
+      "git_blob_sha1": "a737f814a6babee9be6a80ebbd0e7767ddafc0a8",
+      "bytes": 19514,
+      "sha256": "eac6aa4753ee95074663bb87bcf2ce3c93e1b150ed3f845b8dc022c88fd968b9"
+    },
+    {
+      "path": "docs/ada28e0-uefi-report.md",
+      "git_blob_sha1": "6de7da98ad647bd4c5da8f4be5161233e5fdafa5",
+      "bytes": 11298,
+      "sha256": "75637d61063ba6916ad5a46cd60f7acd2f5dbcefcefa5d2637875bd85f309657"
+    },
+    {
+      "path": "docs/bridge-bme-root-cause.md",
+      "git_blob_sha1": "aa72b9378f427bdd22cdedf2baa1e76a5f6da1c7",
+      "bytes": 8170,
+      "sha256": "68335ff9c25ef621e49931454a27c8cb6eb0cf057e0c2ac1409b2add75036a01"
+    },
+    {
+      "path": "docs/chain-walkthrough.md",
+      "git_blob_sha1": "52011f3101c4e011536db97301ea27fe88279a2d",
+      "bytes": 6183,
+      "sha256": "695ce4c5ec8ff2f94bfed0fad27913eca5f2da1008ef0ac01db3e0e0da576010"
+    },
+    {
+      "path": "docs/open-questions.md",
+      "git_blob_sha1": "187913ecc652653d884e50da0b2dcad08c7ebc0a",
+      "bytes": 6273,
+      "sha256": "7d121d93a0b61e054b8933e93fa3692f017ed3b45502093b0bb7193ed27f7ebd"
+    },
+    {
+      "path": "docs/totorong-comparison.md",
+      "git_blob_sha1": "83f3d60aab65f14ce11cf7675ac2795987281e51",
+      "bytes": 5015,
+      "sha256": "47e021318792f24eda10aea20bad2e7a6ff1fbe378ade837ee06b5a14d18d039"
+    },
+    {
+      "path": "loader/Cargo.toml",
+      "git_blob_sha1": "64edc4c34e66a5407bd3f91767e38a8e860a3bae",
+      "bytes": 601,
+      "sha256": "83d17ef199ad4af3020b4015659784970f3648176306a70d6ba87268e522d677"
+    },
+    {
+      "path": "loader/build.rs",
+      "git_blob_sha1": "eaef9e6786f3c2e97710edb43379c50ee224308e",
+      "bytes": 600,
+      "sha256": "22d45387238b79de13c08e1821246966ab1d0bc59fe900174d33316ec72e76f1"
+    },
+    {
+      "path": "loader/src/banner.rs",
+      "git_blob_sha1": "d54aa11db980a044f1debc729a9100d1ca5d0eb1",
+      "bytes": 748,
+      "sha256": "f31efcd02305007a46d3a82d396d82bfdaaad699369e5087ff9cd363175984ca"
+    },
+    {
+      "path": "loader/src/chainload.rs",
+      "git_blob_sha1": "aef97d2a53693104c81884c375fd9a41e8fe7108",
+      "bytes": 14282,
+      "sha256": "c5c94f10d86933fddb813d39bed81d4473460ac20c88355d386ae4c923822048"
+    },
+    {
+      "path": "loader/src/gop.rs",
+      "git_blob_sha1": "8265264174ae590079e1b415f113c0c492d1255b",
+      "bytes": 2566,
+      "sha256": "51214c32ee75ece670f42245a74f7357027de9852f2e2c1b570e4e99aa1c4ed9"
+    },
+    {
+      "path": "loader/src/keywait.rs",
+      "git_blob_sha1": "b7ab623cc47a03be652be39971ab4f0a67ceea70",
+      "bytes": 779,
+      "sha256": "adddb4eee57167557869303499a179b862c6210459d28c06eecbe2790fef2062"
+    },
+    {
+      "path": "loader/src/logging.rs",
+      "git_blob_sha1": "3df9f4a2b9b16c5a7f1a777a57babe69d744eab2",
+      "bytes": 4087,
+      "sha256": "cd0a4525b99f9383c6ea9a41af2743d9ad66ae4b20662141b278d51377a625a9"
+    },
+    {
+      "path": "loader/src/main.rs",
+      "git_blob_sha1": "0bd0ee8a6c927a74c4803110a6c8b285568edb37",
+      "bytes": 7756,
+      "sha256": "05050e376f5bea3e97aef5a2cb84007e1e74bb37d902cb48b22d526d83a7a08b"
+    },
+    {
+      "path": "loader/src/pci.rs",
+      "git_blob_sha1": "a961274009cb5b0dc9fe45692ab54343f7b4e60a",
+      "bytes": 27573,
+      "sha256": "5f4fa99c71a980ab2a1a5b0ddbf58ed60b235b74277c88fb026f7eafb8839cc1"
+    },
+    {
+      "path": "loader/src/sample.rs",
+      "git_blob_sha1": "9741c34c455609e30a0f8efd9e688b621933ce68",
+      "bytes": 8822,
+      "sha256": "166a9cb44dac35f93cd8419f821f779b25294b8028c1fb8d211815ce1ee256ee"
+    },
+    {
+      "path": "loader/src/tx.rs",
+      "git_blob_sha1": "9a1d0c2cac21e4a7441c97b992ae65fddc9e8d4a",
+      "bytes": 63612,
+      "sha256": "cd6350669f2fa2fe951c40784590751c1e8189f3709991822872f860e44b48d2"
+    },
+    {
+      "path": "loader/src/tx_booter.rs",
+      "git_blob_sha1": "1e25b8b0c6505017ab4219e0d0a014ae4e20f66c",
+      "bytes": 42093,
+      "sha256": "c1d93c77b6cf26226e7dcff9519ef278b75f35bf26ad87fee658285283958230"
+    },
+    {
+      "path": "loader/src/tx_detach.rs",
+      "git_blob_sha1": "ca6a57cd42089c3bf70dea32a86320eef659b4cb",
+      "bytes": 7596,
+      "sha256": "5c34038f56746279c30de2237cea0bd000d01276dfc970f831c457c9889db82e"
+    },
+    {
+      "path": "loader/src/tx_fwsec.rs",
+      "git_blob_sha1": "212640da605142b3ca1aba582df89da004d535bb",
+      "bytes": 39711,
+      "sha256": "6bc8c8f149458c94be79aaf65fe36de082886bdd74a80b7052602923ff652cbe"
+    },
+    {
+      "path": "loader/src/tx_portal.rs",
+      "git_blob_sha1": "acf7caadac1e91f97dc4e7a999f36b9e6ba808b0",
+      "bytes": 4983,
+      "sha256": "6ae1ec80c73c99102c755a3f77a8723c4a2d26112f3da5e65ccb02579e6395f2"
+    },
+    {
+      "path": "sim/Cargo.toml",
+      "git_blob_sha1": "1cd76b74ec8d70fe807dfe1d1171bff811cc697d",
+      "bytes": 245,
+      "sha256": "c7e0a9a12f7735b5981bde1d82c6f56735a4db5c7df40ad35c4ea245f2c20a06"
+    },
+    {
+      "path": "sim/src/dma.rs",
+      "git_blob_sha1": "6794b4d06a62853cff6ee8e4e33e8c31c3c065a9",
+      "bytes": 3441,
+      "sha256": "70d4e0f9073afacb2d54ec858cb56a25181ed3eb43a5a66665cacb27e4dc8d53"
+    },
+    {
+      "path": "sim/src/layout.rs",
+      "git_blob_sha1": "f3279e030ed97fc66a02ed538ab1f1e072fb4d04",
+      "bytes": 8867,
+      "sha256": "adf78e3044307033b0d48b5aba2cc9e0f64b890b16276c4d419fe509cd04a4f3"
+    },
+    {
+      "path": "sim/src/lib.rs",
+      "git_blob_sha1": "99b49bb5701deb93a6b63882201a5d4e828e4171",
+      "bytes": 9427,
+      "sha256": "f4c56a870e21ecb4c17c88dcfe31c1fa4e8d67b93b3b238e886ee67f01a6c077"
+    },
+    {
+      "path": "sim/src/radix.rs",
+      "git_blob_sha1": "8d856410f1f04fd46748e0763df05cb96d6b826d",
+      "bytes": 6160,
+      "sha256": "a6864a8df49922dc74cb46f73fe6792354b981299e5a22983d3e56fc3dd5f771"
+    },
+    {
+      "path": "sim/src/scenarios.rs",
+      "git_blob_sha1": "cb84b5f5ffd2832718e99518c6f1d50d68dcd4fc",
+      "bytes": 4571,
+      "sha256": "51f3eb07c36afa0b230c17e75941e792419abfa60ea0c9890d12f408911f8117"
+    },
+    {
+      "path": "sim/src/scenarios2.rs",
+      "git_blob_sha1": "a7c0558738e25a7c7a84f1fa2682916698e410f8",
+      "bytes": 8904,
+      "sha256": "85d74f0781262f3a1deb8c6e4d73aad257b7524f9a78721a616818d66d1cc842"
+    },
+    {
+      "path": "sim/src/transaction.rs",
+      "git_blob_sha1": "2d07a0f16b8f5729821a5e560662b2a5a58aab78",
+      "bytes": 14909,
+      "sha256": "fbfc55f09b53ba3cd02f7f35c285e39bfe9970b2f89928dd5037aa28bd4f64a4"
+    }
+  ],
+  "external_references": [
+    {
+      "local_filename": "edk2-PciIo.h",
+      "source_url": "https://raw.githubusercontent.com/tianocore/edk2/7835e5802a2a70984333c054002e449bfd1f0a0d/MdePkg/Include/Protocol/PciIo.h",
+      "sha256": "11ef99b00e6b5013842996447a6ec410d4020332075cd9d211a2734318d71197"
+    },
+    {
+      "local_filename": "uefi-0.41.0-boot.rs",
+      "source_url": "https://raw.githubusercontent.com/rust-osdev/uefi-rs/973f08de315f7d8ade4ee9c0fdcfbc4fa9f8b43a/uefi/src/boot.rs",
+      "sha256": "37f7e2e193883c713d2fea44074437578ac6edde661c48d149fbc1e25c86920c"
+    }
+  ]
+}
