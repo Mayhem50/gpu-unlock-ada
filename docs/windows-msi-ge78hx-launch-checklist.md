@@ -9,6 +9,10 @@ no assistant EFI launch, GPU query/mutation, unlock or boot-protection change.
 Stage A does not detach/reset the GPU. The adapter foundation is not bootable.
 
 See the [method alignment review](windows-msi-ge78hx-method-alignment.md).
+The operator's [capture 5 review](windows-msi-ge78hx-capture5-review.md) now
+records three resolved boundary owners, an incomplete passive-dependency
+observation and a third SS0 value outside the admitted host profile. No
+qualification or admission rule was relaxed after that capture.
 A complete checklist is not a completed checklist or a guarantee of recovery.
 
 External comparison: [nv-uefi-unlocker v0.2.0 audit](windows-msi-ge78hx-nv-uefi-v020-audit.md).
