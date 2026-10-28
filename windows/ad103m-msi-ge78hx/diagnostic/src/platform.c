@@ -4,6 +4,7 @@
  * The graph is an observation, not an ownership permit or isolation proof.
  */
 #include "platform.h"
+#include "console_state.h"
 #include <Protocol/DevicePath.h>
 #include <Protocol/DriverBinding.h>
 #include <Protocol/LoadedImage.h>
@@ -16,6 +17,7 @@ static EFI_GUID DriverId=EFI_DRIVER_BINDING_PROTOCOL_GUID;
 static EFI_GUID ImageId=EFI_LOADED_IMAGE_PROTOCOL_GUID;
 static EFI_HANDLE Agents[MAX_AGENTS];
 static EFI_HANDLE BoundaryAgents[MAX_AGENTS];
+static CS_CAPTURE ConsoleCapture;
 
 static BOOLEAN Range(UINTN n,UINTN at,UINTN size) {return at<=n&&size<=n-at;}
 BOOLEAN LoadedCodeView(const UINT8 *p,UINTN n,CODE_VIEW *out) {
@@ -288,6 +290,7 @@ void SamplePlatform(TEXT *t,EFI_SYSTEM_TABLE *st,EFI_HANDLE target,EFI_HANDLE se
         Driver(t,bs,BoundaryAgents[i],handles,count,&budget);
     }
     TextPut(t,"],\"dependencies\":");Dependencies(t,st,self,log,opened,handles,count,&budget);
+    TextPut(t,",\"console_state\":");CsCapture(&ConsoleCapture,st,handles,count);CsJson(t,&ConsoleCapture);
     TextPut(t,",\"edge_count\":");TextDec(t,edges);
     TextPut(t,",\"complete\":");TextPut(t,complete?"true":"false");
     TextPut(t,",\"atomic_snapshot\":false,\"release_authorized\":false}");

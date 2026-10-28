@@ -1,5 +1,11 @@
 # MSI GE78HX read-only UEFI probe
 
+Current source additionally prepares a targeted console-state sampler with
+fixed image/code/RVA pins, bounded RAM-only reads and opaque input-event values.
+It is **host-tested only**, not included in the deployed 0.4.4. No event is
+activated or introspected, no heap list followed, and no quiescence claimed.
+See the [scope and regression evidence](../../../docs/windows-msi-ge78hx-targeted-console-preparation.md).
+
 Latest offline correction: numeric coverage of an unrelated large image no
 longer requires reading its code. Relevant large images, malformed ranges and
 missing enumeration evidence still refuse, with explicit scan diagnostics.

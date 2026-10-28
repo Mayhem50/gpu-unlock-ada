@@ -3,6 +3,7 @@ import json
 from analyze import analyze
 from graph import ownership, compare_ownership
 from dependencies import compare_dependencies
+from targeted_state import assess as assess_targeted_state
 
 
 def normalized(data):
@@ -78,6 +79,7 @@ def compare(left, right):
         'console_role_aliases_match':graph['console_role_aliases_match'],
         'ownership_diagnostics':graph,
         'dependency_diagnostics':compare_dependencies(left,right),
+        'targeted_console_observations':{'left':assess_targeted_state(left),'right':assess_targeted_state(right)},
         'topology_unknown_reasons':{
             side:[k for k in ('console_out_handle_path','console_in_handle_path') if data.get(k,{}).get('valid') is not True]
             for side,data in (('left',left),('right',right))},

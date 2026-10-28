@@ -23,6 +23,10 @@ identifies 13 protected storage edges, six missing storage DriverBinding/code
 identities, shared output/input image lifetime and callback/global/event gaps.
 It defines remaining Stage B requirements separately from unlock/reset work;
 no release-only binary is supplied or approved by this audit.
+The [targeted console preparation](windows-msi-ge78hx-targeted-console-preparation.md)
+adds RAM-bounded fixed state and opaque input-event observations with source/host
+regressions. It does not follow heap/event objects or claim notification queues
+are known. No new EFI, Kingston update or release/unlock execution is included.
 The [offline correction and SS0 analysis](windows-msi-ge78hx-capture5-remediation.md)
 separates unrelated large images from code-reading limits. It preserves capture
 5's unknown result and adds an explicit regression refusing its new SS0 value.
@@ -77,7 +81,8 @@ It does not admit this MSI's 2717 ID. No external code was integrated.
   without GPU cleanup for console-only errors or unverified automatic rollback.
 - [x] 500 CPU workflow scenarios / 243,628 assertions and 45 isolated DMA ledger
   cases; diagnostic CPU suites
-  (7,925 application / 722 platform), 68 Python tests, identity and PE/source
+  (7,925 application / 722 platform), 74 Python tests and 24 targeted-console
+  cases / 86 checks, identity and PE/source
   checks recorded passing. Counts include repeated checks, not independent requirements.
 - [x] Negative host/UEFI compilation guards and failed-build manifest invalidation.
 - [x] Previous diagnostic 0.4.2 archived and copy verified, SHA256

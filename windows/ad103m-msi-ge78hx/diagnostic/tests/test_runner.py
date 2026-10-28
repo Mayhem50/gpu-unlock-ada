@@ -1,5 +1,6 @@
 """A Windows crash is a nonzero signed exit code, not necessarily ERRORLEVEL >= 1."""
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -26,3 +27,7 @@ class RunnerTests(unittest.TestCase):
             text=(ROOT/name).read_text()
             self.assertNotIn('if errorlevel 1 exit /b 1',text)
             self.assertIn('if not "%errorlevel%"=="0" exit /b 1',text)
+            # Expected negative compilation leaves a nonzero ERRORLEVEL. The
+            # runner must explicitly return success after all guard checks.
+            command=re.search(r"=\s*@'(.*?)'@",text,re.S).group(1).strip()
+            self.assertTrue(command.endswith('exit /b 0'))

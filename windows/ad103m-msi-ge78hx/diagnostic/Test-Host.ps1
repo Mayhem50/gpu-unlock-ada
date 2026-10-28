@@ -14,14 +14,24 @@ call "@VCVARS@" >nul
 if not "%errorlevel%"=="0" exit /b 1
 cd /d "@ROOT@"
 if not "%errorlevel%"=="0" exit /b 1
-cl /nologo /W4 /WX /Od /D_CRT_SECURE_NO_WARNINGS /FIbuild_id.h /Ibuild /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 tests\host_tests.c src\core.c src\sample.c src\platform.c /Febuild\host-tests.exe /Fobuild\
+cl /nologo /W4 /WX /Od /D_CRT_SECURE_NO_WARNINGS /FIbuild_id.h /Ibuild /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 /DCS_REAL_PROFILE tests\host_tests.c src\core.c src\sample.c src\platform.c src\console_state.c /Febuild\host-tests.exe /Fobuild\
 if not "%errorlevel%"=="0" exit /b 1
 build\host-tests.exe
 if not "%errorlevel%"=="0" exit /b 1
-cl /nologo /W4 /WX /Od /D_CRT_SECURE_NO_WARNINGS /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 tests\platform_tests.c src\core.c src\platform.c /Febuild\platform-tests.exe /Fobuild\
+cl /nologo /W4 /WX /Od /D_CRT_SECURE_NO_WARNINGS /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 /DCS_REAL_PROFILE tests\platform_tests.c src\core.c src\platform.c src\console_state.c /Febuild\platform-tests.exe /Fobuild\
 if not "%errorlevel%"=="0" exit /b 1
 build\platform-tests.exe
 if not "%errorlevel%"=="0" exit /b 1
+cl /nologo /W4 /WX /Od /D_CRT_SECURE_NO_WARNINGS /DCS_SYNTHETIC_PROFILE /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 tests\console_state_tests.c src\core.c src\platform.c src\console_state.c /Febuild\console-state-tests.exe /Fobuild\
+if not "%errorlevel%"=="0" exit /b 1
+build\console-state-tests.exe
+if not "%errorlevel%"=="0" exit /b 1
+cl /nologo /W4 /WX /c /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 src\console_state.c /Fobuild\forbidden-console.obj >build\console-no-profile.log 2>&1
+if "%errorlevel%"=="0" exit /b 1
+cl /nologo /W4 /WX /c /DCS_REAL_PROFILE /DCS_SYNTHETIC_PROFILE /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 src\console_state.c /Fobuild\forbidden-console.obj >build\console-mixed-profile.log 2>&1
+if "%errorlevel%"=="0" exit /b 1
+cl /nologo /W4 /WX /c /DCS_SYNTHETIC_PROFILE /DGU_UEFI_PORT /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 src\console_state.c /Fobuild\forbidden-console.obj >build\console-unlock-profile.log 2>&1
+if "%errorlevel%"=="0" exit /b 1
 exit /b 0
 '@
 $cmd=$cmd.Replace('@VCVARS@',$vcvars).Replace('@ROOT@',$PSScriptRoot)

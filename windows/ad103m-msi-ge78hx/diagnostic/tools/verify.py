@@ -56,6 +56,10 @@ def main():
     validate_pe((root/'build/AD103M-PROBE.EFI').read_bytes())
     validate_source((root/'src/probe.c').read_text())
     validate_source((root/'src/platform.c').read_text())
+    targeted=(root/'src/console_state.c').read_text()
+    validate_source(targeted)
+    require(not re.search(r'->(?:CheckEvent|WaitForEvent|SignalEvent|SetTimer|CreateEvent|CreateEventEx|CloseEvent|RaiseTPL|RestoreTPL)\s*\(',targeted),
+            'Targeted sampler must not activate events or change TPL')
     sample=(root/'src/sample.c').read_text()
     validate_source(sample.replace('->Mem.Read','->ApprovedRead'))
     require(sample.count('pci->Mem.Read(')==6,'Expected register and bounded PROM read call sites')
