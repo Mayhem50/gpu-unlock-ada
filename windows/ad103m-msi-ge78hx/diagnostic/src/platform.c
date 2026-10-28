@@ -21,7 +21,7 @@ static BOOLEAN Range(UINTN n,UINTN at,UINTN size) {return at<=n&&size<=n-at;}
 BOOLEAN LoadedCodeView(const UINT8 *p,UINTN n,CODE_VIEW *out) {
     UINTN pe,opt,table,i,code_count=0;UINT32 reloc,reloc_bytes,at=0;CODE_VIEW v={0,0,0};
     if(!out)return FALSE;*out=v;
-    if(!p||n>16u*1024u*1024u||!Range(n,0,64)||Read16(p)!=0x5a4d)return FALSE;
+    if(!p||n>16u*1024u*1024u||(UINTN)p>MAX_UINTN-n||!Range(n,0,64)||Read16(p)!=0x5a4d)return FALSE;
     pe=Read32(p+60);
     if(!Range(n,pe,24)||Read32(p+pe)!=0x4550||Read16(p+pe+4)!=0x8664||
        !Read16(p+pe+6)||Read16(p+pe+6)>32)return FALSE;
@@ -65,9 +65,21 @@ static UINT8 *Path(EFI_BOOT_SERVICES *bs,EFI_HANDLE h,UINTN *n) {
     if(!h||EFI_ERROR(bs->HandleProtocol(h,&PathId,&p))||!p||!DpMeasure(p,PROBE_DP_MAX,n,&multi)||multi)return NULL;
     return p;
 }
+static void ImageCode(TEXT *t,EFI_LOADED_IMAGE_PROTOCOL *image,UINTN *budget) {
+    CODE_VIEW view;UINT8 hash[32];
+    if(!image->ImageBase||!image->ImageSize||image->ImageSize>16u*1024u*1024u||
+       (UINTN)image->ImageBase>MAX_UINTN-image->ImageSize){TextPut(t,"null");return;}
+    if(!LoadedCodeView(image->ImageBase,(UINTN)image->ImageSize,&view)){TextPut(t,"null");return;}
+    TextPut(t,"{\"rva\":");TextHex(t,view.rva,8);TextPut(t,",\"length\":");TextDec(t,view.bytes);
+    TextPut(t,",\"relocations_in_code\":");TextDec(t,view.relocations);
+    Sha256((UINT8 *)image->ImageBase+view.rva,view.bytes,hash);
+    TextPut(t,",\"loaded_sha256\":");TextBytes(t,hash,32);TextPut(t,",\"hex\":");
+    if(view.bytes<=*budget){TextBytes(t,(UINT8 *)image->ImageBase+view.rva,view.bytes);*budget-=view.bytes;}
+    else TextPut(t,"null");TextPut(t,"}");
+}
 static void Driver(TEXT *t,EFI_BOOT_SERVICES *bs,EFI_HANDLE agent,EFI_HANDLE *handles,UINTN count,UINTN *budget) {
     EFI_DRIVER_BINDING_PROTOCOL *binding=NULL;EFI_LOADED_IMAGE_PROTOCOL *image=NULL;
-    EFI_STATUS s;CODE_VIEW view;UINT8 hash[32];UINTN path_n=0;UINT8 *path=NULL;
+    EFI_STATUS s;UINTN path_n=0;UINT8 *path=NULL;
     TextPut(t,"{\"agent\":");HandleId(t,handles,count,agent);
     s=bs->HandleProtocol(agent,&DriverId,(VOID **)&binding);
     TextPut(t,",\"binding_status\":");TextHex(t,s,16);
@@ -89,15 +101,93 @@ static void Driver(TEXT *t,EFI_BOOT_SERVICES *bs,EFI_HANDLE agent,EFI_HANDLE *ha
     if(image->FilePath) {BOOLEAN multi=FALSE;if(DpMeasure((UINT8 *)image->FilePath,PROBE_DP_MAX,&path_n,&multi)&&!multi)path=(UINT8 *)image->FilePath;}
     if(path)TextBytes(t,path,path_n);else TextPut(t,"null");
     TextPut(t,",\"code\":");
-    if(!LoadedCodeView(image->ImageBase,(UINTN)image->ImageSize,&view)){TextPut(t,"null}");return;}
-    TextPut(t,"{\"rva\":");TextHex(t,view.rva,8);TextPut(t,",\"length\":");TextDec(t,view.bytes);
-    TextPut(t,",\"relocations_in_code\":");TextDec(t,view.relocations);
-    Sha256((UINT8 *)image->ImageBase+view.rva,view.bytes,hash);
-    TextPut(t,",\"loaded_sha256\":");TextBytes(t,hash,32);TextPut(t,",\"hex\":");
-    if(view.bytes<=*budget){TextBytes(t,(UINT8 *)image->ImageBase+view.rva,view.bytes);*budget-=view.bytes;}
-    else TextPut(t,"null");TextPut(t,"}}");
+    ImageCode(t,image,budget);TextPut(t,"}");
 }
-void SamplePlatform(TEXT *t,EFI_SYSTEM_TABLE *st,EFI_HANDLE target) {
+/* This helper only reads registered protocol tables and loaded image ranges.
+ * It never invokes or dereferences a captured function address. */
+typedef struct {const CHAR8 *role,*name;UINTN address;} CALLBACK;
+static void Dependencies(TEXT *t,EFI_SYSTEM_TABLE *st,EFI_HANDLE self,EFI_FILE_PROTOCOL *log,
+                         const LOG_SOURCE *opened,EFI_HANDLE *handles,UINTN count,UINTN *budget) {
+    EFI_BOOT_SERVICES *bs=st->BootServices;
+    EFI_GUID out_id=EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL_GUID,in_id=EFI_SIMPLE_TEXT_INPUT_PROTOCOL_GUID;
+    EFI_GUID fs_id=EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
+    EFI_LOADED_IMAGE_PROTOCOL *own=NULL;EFI_HANDLE volume=NULL;
+    CALLBACK callbacks[24];UINTN n=0,i,j,path_n=0,captured_images=0;UINT8 *path=NULL;
+    BOOLEAN complete=TRUE,first=TRUE;EFI_STATUS s;VOID *protocol=NULL;UINT8 path_hash[32];
+#define CAP(role_,object_,field_) do {callbacks[n].role=role_;callbacks[n].name=#field_;callbacks[n++].address=(UINTN)(object_)->field_;}while(0)
+    TextPut(t,"{\"bindings\":[");
+    for(i=0;i<3;i++) {
+        const CHAR8 *role=i==0?"conout":i==1?"stderr":"conin";
+        EFI_HANDLE h=i==0?st->ConsoleOutHandle:i==1?st->StandardErrorHandle:st->ConsoleInHandle;
+        VOID *expected=i==0?(VOID *)st->ConOut:i==1?(VOID *)st->StdErr:(VOID *)st->ConIn;
+        protocol=NULL;s=h?bs->HandleProtocol(h,i==2?&in_id:&out_id,&protocol):EFI_NOT_FOUND;
+        if(i)TextPut(t,",");TextPut(t,"{\"role\":\"");TextPut(t,role);TextPut(t,"\",\"handle\":");HandleId(t,handles,count,h);
+        TextPut(t,",\"status\":");TextHex(t,s,16);TextPut(t,",\"interface\":");TextHex(t,(UINTN)expected,16);
+        TextPut(t,",\"matches_system_table\":");
+        if(s!=EFI_SUCCESS||!protocol||protocol!=expected||Index(handles,count,h)==MAX_UINTN) {
+            TextPut(t,"false}");complete=FALSE;continue;
+        }
+        TextPut(t,"true}");
+        if(i==2) {
+            EFI_SIMPLE_TEXT_INPUT_PROTOCOL *in=protocol;
+            CAP(role,in,Reset);CAP(role,in,ReadKeyStroke);
+        } else {
+            EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *out=protocol;
+            CAP(role,out,Reset);CAP(role,out,OutputString);CAP(role,out,TestString);
+            CAP(role,out,QueryMode);CAP(role,out,SetMode);CAP(role,out,SetAttribute);
+            CAP(role,out,ClearScreen);CAP(role,out,SetCursorPosition);CAP(role,out,EnableCursor);
+        }
+    }
+    TextPut(t,"],\"source\":{\"image\":");HandleId(t,handles,count,self);
+    s=self?bs->HandleProtocol(self,&ImageId,(VOID **)&own):EFI_NOT_FOUND;
+    TextPut(t,",\"status\":");TextHex(t,s,16);
+    if(s==EFI_SUCCESS&&own&&Index(handles,count,self)!=MAX_UINTN)volume=own->DeviceHandle;
+    TextPut(t,",\"volume\":");HandleId(t,handles,count,volume);
+    if(volume&&Index(handles,count,volume)!=MAX_UINTN)path=Path(bs,volume,&path_n);
+    TextPut(t,",\"path\":");if(path)TextBytes(t,path,path_n);else TextPut(t,"null");
+    TextPut(t,",\"usb\":");
+    if(!path||!DpHasUsb(path,path_n)){TextPut(t,"false");complete=FALSE;}else TextPut(t,"true");
+    TextPut(t,",\"log_volume\":");HandleId(t,handles,count,opened?opened->volume:NULL);
+    TextPut(t,",\"opened_path_sha256\":");if(opened&&opened->opened)TextBytes(t,opened->path_sha256,32);else TextPut(t,"null");
+    TextPut(t,",\"matches_opened_volume\":");
+    if(path)Sha256(path,path_n,path_hash);
+    if(!opened||!opened->opened||!log||!volume||volume!=opened->volume||!path||
+       !BytesEqual(path_hash,opened->path_sha256,32)){TextPut(t,"false");complete=FALSE;}else TextPut(t,"true");
+    protocol=NULL;s=volume?bs->HandleProtocol(volume,&fs_id,&protocol):EFI_NOT_FOUND;
+    TextPut(t,",\"filesystem_status\":");TextHex(t,s,16);TextPut(t,"}");
+    if(s==EFI_SUCCESS&&protocol) {EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *fs=protocol;CAP("filesystem",fs,OpenVolume);}
+    else complete=FALSE;
+    if(log){CAP("log",log,Write);CAP("log",log,Flush);CAP("log",log,Close);}else complete=FALSE;
+#undef CAP
+    TextPut(t,",\"callbacks\":[");
+    for(i=0;i<n;i++) {
+        if(i)TextPut(t,",");TextPut(t,"{\"role\":\"");TextPut(t,callbacks[i].role);
+        TextPut(t,"\",\"name\":\"");TextPut(t,callbacks[i].name);TextPut(t,"\",\"address\":");TextHex(t,callbacks[i].address,16);TextPut(t,"}");
+        if(!callbacks[i].address)complete=FALSE;
+    }
+    TextPut(t,"],\"images\":[");
+    for(i=0;i<count;i++) {
+        EFI_LOADED_IMAGE_PROTOCOL *image=NULL;BOOLEAN matched=FALSE;UINTN base;
+        s=bs->HandleProtocol(handles[i],&ImageId,(VOID **)&image);
+        if(s==EFI_UNSUPPORTED)continue;
+        if(s!=EFI_SUCCESS||!image||!image->ImageBase||!image->ImageSize||image->ImageSize>16u*1024u*1024u||
+           (UINTN)image->ImageBase>MAX_UINTN-image->ImageSize){complete=FALSE;continue;}
+        base=(UINTN)image->ImageBase;
+        for(j=0;j<n;j++)if(callbacks[j].address>=base&&callbacks[j].address-base<image->ImageSize)matched=TRUE;
+        if(!matched)continue;
+        if(captured_images>=32){complete=FALSE;continue;}captured_images++;
+        if(!first)TextPut(t,",");first=FALSE;
+        TextPut(t,"{\"handle\":");TextDec(t,i);TextPut(t,",\"base\":");TextHex(t,base,16);
+        TextPut(t,",\"image_bytes\":");TextDec(t,image->ImageSize);TextPut(t,",\"code_type\":");TextDec(t,image->ImageCodeType);
+        TextPut(t,",\"file_path\":");path_n=0;
+        if(image->FilePath){BOOLEAN multi=FALSE;if(DpMeasure((UINT8 *)image->FilePath,PROBE_DP_MAX,&path_n,&multi)&&!multi)TextBytes(t,(UINT8 *)image->FilePath,path_n);else TextPut(t,"null");}
+        else TextPut(t,"null");
+        TextPut(t,",\"code\":");ImageCode(t,image,budget);TextPut(t,"}");
+    }
+    TextPut(t,"],\"observation_complete\":");TextPut(t,complete?"true":"false");
+    TextPut(t,",\"callbacks_invoked\":false,\"atomic_snapshot\":false,\"release_authorized\":false}");
+}
+void SamplePlatform(TEXT *t,EFI_SYSTEM_TABLE *st,EFI_HANDLE target,EFI_HANDLE self,EFI_FILE_PROTOCOL *log,const LOG_SOURCE *opened) {
     EFI_BOOT_SERVICES *bs=st?st->BootServices:NULL;EFI_HANDLE *handles=NULL;UINTN count=0,i,edges=0,agents=0,boundary_agents=0,budget=CODE_BUDGET;
     UINTN target_n=0;UINT8 *target_path;BOOLEAN complete=TRUE,first=TRUE;EFI_STATUS status;
     if(!bs||!target||!bs->LocateHandleBuffer||!bs->HandleProtocol||!bs->FreePool||
@@ -169,7 +259,8 @@ void SamplePlatform(TEXT *t,EFI_SYSTEM_TABLE *st,EFI_HANDLE target) {
         if(!first)TextPut(t,",");first=FALSE;
         Driver(t,bs,BoundaryAgents[i],handles,count,&budget);
     }
-    TextPut(t,"],\"edge_count\":");TextDec(t,edges);
+    TextPut(t,"],\"dependencies\":");Dependencies(t,st,self,log,opened,handles,count,&budget);
+    TextPut(t,",\"edge_count\":");TextDec(t,edges);
     TextPut(t,",\"complete\":");TextPut(t,complete?"true":"false");
     TextPut(t,",\"atomic_snapshot\":false,\"release_authorized\":false}");
     bs->FreePool(handles);

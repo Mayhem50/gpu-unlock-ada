@@ -204,16 +204,18 @@ static void Gops(EFI_SYSTEM_TABLE *st,TEXT *t) {
     TextPut(t,",\"gop_enumeration_complete\":");Bool(t,complete);
     if(handles) st->BootServices->FreePool(handles);
 }
-static EFI_STATUS OpenLog(EFI_HANDLE image,EFI_SYSTEM_TABLE *st,EFI_FILE_PROTOCOL **log,CHAR16 filename[13]) {
+static EFI_STATUS OpenLog(EFI_HANDLE image,EFI_SYSTEM_TABLE *st,EFI_FILE_PROTOCOL **log,CHAR16 filename[13],LOG_SOURCE *source) {
     EFI_LOADED_IMAGE_PROTOCOL *loaded=NULL;EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *fs=NULL;
     EFI_FILE_PROTOCOL *root=NULL,*dir=NULL,*existing=NULL;EFI_STATUS s,close_status;UINTN slot,k,path_len=0;
-    BOOLEAN multi=FALSE;UINT8 *volume_path;
-    *log=NULL;
+    BOOLEAN multi=FALSE;UINT8 *volume_path;EFI_HANDLE volume;
+    *log=NULL;source->opened=FALSE;source->volume=NULL;
     s=st->BootServices->HandleProtocol(image,&LoadedGuid,(VOID **)&loaded);
     if(EFI_ERROR(s)||!loaded) return EFI_NOT_FOUND;
-    volume_path=PathFor(st->BootServices,loaded->DeviceHandle,&path_len,&multi);
+    volume=loaded->DeviceHandle;
+    volume_path=PathFor(st->BootServices,volume,&path_len,&multi);
     if(!volume_path||multi||!DpHasUsb(volume_path,path_len)) return EFI_ACCESS_DENIED;
-    s=st->BootServices->HandleProtocol(loaded->DeviceHandle,&FsGuid,(VOID **)&fs);
+    Sha256(volume_path,path_len,source->path_sha256);
+    s=st->BootServices->HandleProtocol(volume,&FsGuid,(VOID **)&fs);
     if(EFI_ERROR(s)||!fs) return EFI_NOT_FOUND;
     s=fs->OpenVolume(fs,&root);if(EFI_ERROR(s)||!root) return EFI_ERROR(s)?s:EFI_DEVICE_ERROR;
     s=root->Open(root,&dir,L"AD103M-PROBE",EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE|EFI_FILE_MODE_CREATE,EFI_FILE_DIRECTORY);
@@ -232,6 +234,7 @@ static EFI_STATUS OpenLog(EFI_HANDLE image,EFI_SYSTEM_TABLE *st,EFI_FILE_PROTOCO
     if(slot>9999) s=EFI_VOLUME_FULL;
     close_status=dir->Close(dir);if(!EFI_ERROR(s)&&EFI_ERROR(close_status)) s=close_status;
     if(EFI_ERROR(s)&&*log) {(*log)->Close(*log);*log=NULL;}
+    if(s==EFI_SUCCESS&&*log){source->volume=volume;source->opened=TRUE;}
     return s;
 }
 static void ConsolePath(TEXT *t,EFI_SYSTEM_TABLE *st,EFI_HANDLE h) {
@@ -243,9 +246,10 @@ EFI_STATUS EFIAPI UefiMain(EFI_HANDLE image,EFI_SYSTEM_TABLE *st) {
     TEXT t;EFI_FILE_PROTOCOL *log=NULL;EFI_STATUS s,flush_status,close_status;UINTN size,mmio_attempts=0,index;CHAR16 filename[13];
     DISPLAY *target=NULL;
     BOOLEAN prom_read_allowed=FALSE;
+    LOG_SOURCE source={0};
     if(!st||!st->BootServices||!st->RuntimeServices||RelocationAnchor!=Report) return EFI_INVALID_PARAMETER;
     Message(st,L"MSI GE78HX AD103M diagnostic v0.4.2 - no GPU writes or unlock.\r\n");
-    s=OpenLog(image,st,&log,filename);
+    s=OpenLog(image,st,&log,filename,&source);
     if(EFI_ERROR(s)||!log) {Message(st,L"USB path not confirmed, or log unavailable. Returning to firmware.\r\n");return EFI_ERROR(s)?s:EFI_DEVICE_ERROR;}
     TextInit(&t,Report,sizeof(Report));
     TextPut(&t,"{\n\"schema\":4,\"probe_version\":\"" PROBE_VERSION "\",\"build_id\":\"" PROBE_BUILD_ID "\",\"gpu_writes\":false,\"unlock_attempted\":false,");
@@ -282,7 +286,7 @@ EFI_STATUS EFIAPI UefiMain(EFI_HANDLE image,EFI_SYSTEM_TABLE *st) {
         RomPcirValid(target->pci->RomImage,(UINTN)target->pci->RomSize,0x10de,0x2717))
         TextBytes(&t,target->pci->RomImage,(UINTN)target->pci->RomSize);
     else TextPut(&t,"null");
-    TextPut(&t,",\"platform\":");SamplePlatform(&t,st,target?target->handle:NULL);
+    TextPut(&t,",\"platform\":");SamplePlatform(&t,st,target?target->handle:NULL,image,log,&source);
     TextPut(&t,",\"limitations\":[\"diagnostic reads do not establish unlock eligibility\",\"cached ROM is not physical PROM\",\"GOP inventory does not prove display isolation\"]}\n");
     if(t.failed) {log->Close(log);Message(st,L"Report buffer limit reached. Capture incomplete.\r\n");return EFI_BUFFER_TOO_SMALL;}
     size=t.len;s=log->Write(log,&size,Report);

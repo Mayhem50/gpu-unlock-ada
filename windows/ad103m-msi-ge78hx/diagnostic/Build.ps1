@@ -25,28 +25,28 @@ Set-Content -LiteralPath (Join-Path $buildDir 'build_id.h') -Value ('#define PRO
 $script = @'
 @echo off
 call "@VCVARS@" >nul
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 cd /d "@ROOT@"
 cl /nologo /W4 /WX /O2 /Oi /GS- /Gs65536 /Zl /c /TC /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 /Fobuild\core.obj src\core.c
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 cl /nologo /W4 /WX /O2 /Oi /GS- /Gs65536 /Zl /c /TC /FIbuild_id.h /Ibuild /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 /Fobuild\probe.obj src\probe.c
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 cl /nologo /W4 /WX /O2 /Oi /GS- /Gs65536 /Zl /c /TC /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 /Fobuild\sample.obj src\sample.c
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 cl /nologo /W4 /WX /O2 /Oi /GS- /Gs65536 /Zl /c /TC /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 /Fobuild\platform.obj src\platform.c
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 cl /nologo /W4 /WX /Od /Oi- /GS- /Zl /c /TC /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 /Fobuild\runtime.obj src\runtime.c
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 link /nologo /subsystem:efi_application /entry:UefiMain /machine:x64 /nodefaultlib /incremental:no /fixed:no /dynamicbase:no /nxcompat:no /out:build\AD103M-PROBE.EFI build\core.obj build\probe.obj build\sample.obj build\platform.obj build\runtime.obj
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 cl /nologo /W4 /WX /Od /D_CRT_SECURE_NO_WARNINGS /FIbuild_id.h /Ibuild /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 tests\host_tests.c src\core.c src\sample.c src\platform.c /Febuild\host-tests.exe /Fobuild\
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 build\host-tests.exe
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 cl /nologo /W4 /WX /Od /D_CRT_SECURE_NO_WARNINGS /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 tests\platform_tests.c src\core.c src\platform.c /Febuild\platform-tests.exe /Fobuild\
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 build\platform-tests.exe
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 '@
 $script = $script.Replace('@VCVARS@', $VcVars).Replace('@ROOT@', $PSScriptRoot)
 $cmdFile = Join-Path $buildDir 'compile.cmd'

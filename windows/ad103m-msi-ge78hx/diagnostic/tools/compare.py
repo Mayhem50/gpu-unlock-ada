@@ -2,6 +2,7 @@
 import json
 from analyze import analyze
 from graph import ownership, compare_ownership
+from dependencies import compare_dependencies
 
 
 def normalized(data):
@@ -76,6 +77,7 @@ def compare(left, right):
         'console_variables_match':(True if a['console_variables_complete'] and b['console_variables_complete'] else None) if variables_equal else False,
         'console_role_aliases_match':graph['console_role_aliases_match'],
         'ownership_diagnostics':graph,
+        'dependency_diagnostics':compare_dependencies(left,right),
         'topology_unknown_reasons':{
             side:[k for k in ('console_out_handle_path','console_in_handle_path') if data.get(k,{}).get('valid') is not True]
             for side,data in (('left',left),('right',right))},

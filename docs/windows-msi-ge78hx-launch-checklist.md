@@ -55,7 +55,7 @@ It does not admit this MSI's 2717 ID. No external code was integrated.
   without GPU cleanup for console-only errors or unverified automatic rollback.
 - [x] 499 CPU workflow scenarios / 243,622 assertions and 45 isolated DMA ledger
   cases; diagnostic CPU suites
-  (7,925 application / 192 platform), 39 Python tests, identity and PE/source
+  (7,925 application / 605 platform), 57 Python tests, identity and PE/source
   checks recorded passing. Counts include repeated checks, not independent requirements.
 - [x] Negative host/UEFI compilation guards and failed-build manifest invalidation.
 - [x] Diagnostic EFI unchanged, SHA256
@@ -67,6 +67,7 @@ It does not admit this MSI's 2717 ID. No external code was integrated.
 Repeat from the repository root using CPU-only commands:
 
     pwsh -NoProfile -File windows/ad103m-msi-ge78hx/port/Build-Offline.ps1
+    pwsh -NoProfile -File windows/ad103m-msi-ge78hx/diagnostic/Test-Host.ps1
     python -m unittest discover -s windows/ad103m-msi-ge78hx/diagnostic/tests -p 'test_*.py'
     pwsh -NoProfile -File windows/ad103m-msi-ge78hx/diagnostic/tests/test_identity.ps1
     python windows/ad103m-msi-ge78hx/diagnostic/tools/verify.py
@@ -88,6 +89,11 @@ this MSI model validation. Their scenario counts are not MSI coverage.
   built/deployed/executed. Existing captures still lack these identities;
   console callback and USB/logging dependencies remain open. See the
   [boundary collection preparation](windows-msi-ge78hx-gop-console-analysis.md#read-only-boundary-collection-preparation--2026-10-28).
+  [Passive dependency capture](windows-msi-ge78hx-passive-dependencies.md) now
+  prepares 24 console/filesystem/log callback entries, registered-image/code
+  provenance and opened USB-log binding. CPU tests refuse missing/ambiguous
+  origins; no new EFI was built or executed. Existing captures still lack the
+  evidence; storage ownership and notification exclusion remain unproved.
 - [ ] **P3:** bind exclusive PCI I/O interface, protocol IO/MEM/BME attributes,
   logical BAR descriptors and hardware command consistently. Review any status
   exception independently instead of widening admission masks.

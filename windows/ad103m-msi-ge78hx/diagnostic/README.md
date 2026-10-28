@@ -7,6 +7,18 @@ boundary-identity collection extension tested only with host mocks; no EFI
 containing that extension has been built, staged or run. It is not qualified
 for driver release, reset or unlock.
 
+The source also prepares passive console/filesystem/log callback provenance and
+the actual opened USB-log source, tested only against fake services. No captured
+callback is invoked by that sampler. Registered-image matching never authorizes
+release or notification exclusion; absent/ambiguous evidence stays unknown.
+See the [scope, regressions and remaining gates](../../../docs/windows-msi-ge78hx-passive-dependencies.md).
+
+For source preparation without rebuilding an EFI, use the tracked CPU runner:
+
+```powershell
+pwsh -NoProfile -File windows/ad103m-msi-ge78hx/diagnostic/Test-Host.ps1
+```
+
 From the repository root:
 
 ```powershell
