@@ -71,3 +71,26 @@ the reported conditions/last screen; never assign this build ID to old captures.
 The pending evidence remains real boundary/callback identities, storage driver
 ownership and event/service behavior. Matching callback code alone cannot close
 P2/T7 or qualify detach, reset, Windows driver recovery or unlock.
+
+## Subsequent authorized USB preparation — 2026-10-28
+
+After the operator's approval, the exact 0.4.3 packet was copied to the
+identity-checked Kingston E:. Its disk number was 3 at this operation; the
+matching serial/size/partition identity was used instead of a fixed disk number.
+Stage A was backed up locally under
+`diagnostic/build/usb-backups/20261028T1657047154421Z/STAGE-A-BOOTX64.EFI` and
+its SHA256 verified before replacement. The final USB fallback SHA256 matches
+the 0.4.3 value above. The sealed manifest/instructions are preserved separately
+under `E:/AD103M-PACKETS/<full diagnostic SHA256>/`.
+
+The [staging script and policy](../windows/ad103m-msi-ge78hx/deployment/README.md)
+passed 20 RAM-only admission/refusal tests. The ignored deployment journal
+records `status=verified`, `deployed=true`, `firmware_executed=false`,
+`gpu_access=false`, `protections_modified=false`. No EFI or GPU operation,
+reboot, formatting or security-policy change occurred. Earlier build-time
+`deployed=false` fields are not rewritten or mistaken for current media state.
+
+**The next boot from this USB now starts the diagnostic automatically; it does
+not show Stage A's W confirmation.** A new firmware run has not yet been
+reported. Current security/recovery and workload prerequisites still need to
+be checked for that separate test; no unlock/reset trial is authorized here.
