@@ -14,6 +14,10 @@ The operator's [capture 5 review](windows-msi-ge78hx-capture5-review.md) now
 records three resolved boundary owners, an incomplete passive-dependency
 observation and a third SS0 value outside the admitted host profile. No
 qualification or admission rule was relaxed after that capture.
+The [capture 6 review](windows-msi-ge78hx-capture6-review.md) subsequently
+confirms complete passive callback observation under 0.4.4 and repeated external
+boundary identities against capture 5. Storage ownership/notification exclusion
+remain unproved; a fourth SS0 value is recorded without widening admission.
 The [offline correction and SS0 analysis](windows-msi-ge78hx-capture5-remediation.md)
 separates unrelated large images from code-reading limits. It preserves capture
 5's unknown result and adds an explicit regression refusing its new SS0 value.
