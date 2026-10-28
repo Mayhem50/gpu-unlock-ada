@@ -13,6 +13,10 @@ The operator's [capture 5 review](windows-msi-ge78hx-capture5-review.md) now
 records three resolved boundary owners, an incomplete passive-dependency
 observation and a third SS0 value outside the admitted host profile. No
 qualification or admission rule was relaxed after that capture.
+The [offline correction and SS0 analysis](windows-msi-ge78hx-capture5-remediation.md)
+separates unrelated large images from code-reading limits. It preserves capture
+5's unknown result and adds an explicit regression refusing its new SS0 value.
+Corrected sources have not been rebuilt/staged as EFI.
 A complete checklist is not a completed checklist or a guarantee of recovery.
 
 External comparison: [nv-uefi-unlocker v0.2.0 audit](windows-msi-ge78hx-nv-uefi-v020-audit.md).
@@ -57,9 +61,9 @@ It does not admit this MSI's 2717 ID. No external code was integrated.
   release; final compound commit revalidates state and lease at its action.
 - [x] Partial console mutation tracked before callback; terminal result on failure,
   without GPU cleanup for console-only errors or unverified automatic rollback.
-- [x] 499 CPU workflow scenarios / 243,622 assertions and 45 isolated DMA ledger
+- [x] 500 CPU workflow scenarios / 243,628 assertions and 45 isolated DMA ledger
   cases; diagnostic CPU suites
-  (7,925 application / 605 platform), 62 Python tests, identity and PE/source
+  (7,925 application / 722 platform), 68 Python tests, identity and PE/source
   checks recorded passing. Counts include repeated checks, not independent requirements.
 - [x] Negative host/UEFI compilation guards and failed-build manifest invalidation.
 - [x] Previous diagnostic 0.4.2 archived and copy verified, SHA256

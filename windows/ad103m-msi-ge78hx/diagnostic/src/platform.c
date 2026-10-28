@@ -106,6 +106,12 @@ static void Driver(TEXT *t,EFI_BOOT_SERVICES *bs,EFI_HANDLE agent,EFI_HANDLE *ha
 /* This helper only reads registered protocol tables and loaded image ranges.
  * It never invokes or dereferences a captured function address. */
 typedef struct {const CHAR8 *role,*name;UINTN address;} CALLBACK;
+typedef struct {UINTN handle;EFI_STATUS status;const CHAR8 *reason;} SCAN_ISSUE;
+typedef struct {SCAN_ISSUE issues[32];UINTN count,stored,registered,large_unmatched;BOOLEAN range_complete;} IMAGE_SCAN;
+static void ScanIssue(IMAGE_SCAN *scan,UINTN handle,EFI_STATUS status,const CHAR8 *reason,BOOLEAN gap) {
+    scan->count++;if(gap)scan->range_complete=FALSE;
+    if(scan->stored<32){SCAN_ISSUE *i=&scan->issues[scan->stored++];i->handle=handle;i->status=status;i->reason=reason;}
+}
 static void Dependencies(TEXT *t,EFI_SYSTEM_TABLE *st,EFI_HANDLE self,EFI_FILE_PROTOCOL *log,
                          const LOG_SOURCE *opened,EFI_HANDLE *handles,UINTN count,UINTN *budget) {
     EFI_BOOT_SERVICES *bs=st->BootServices;
@@ -114,6 +120,7 @@ static void Dependencies(TEXT *t,EFI_SYSTEM_TABLE *st,EFI_HANDLE self,EFI_FILE_P
     EFI_LOADED_IMAGE_PROTOCOL *own=NULL;EFI_HANDLE volume=NULL;
     CALLBACK callbacks[24];UINTN n=0,i,j,path_n=0,captured_images=0;UINT8 *path=NULL;
     BOOLEAN complete=TRUE,first=TRUE;EFI_STATUS s;VOID *protocol=NULL;UINT8 path_hash[32];
+    IMAGE_SCAN scan={0};scan.range_complete=TRUE;
 #define CAP(role_,object_,field_) do {callbacks[n].role=role_;callbacks[n].name=#field_;callbacks[n++].address=(UINTN)(object_)->field_;}while(0)
     TextPut(t,"{\"bindings\":[");
     for(i=0;i<3;i++) {
@@ -170,21 +177,42 @@ static void Dependencies(TEXT *t,EFI_SYSTEM_TABLE *st,EFI_HANDLE self,EFI_FILE_P
         EFI_LOADED_IMAGE_PROTOCOL *image=NULL;BOOLEAN matched=FALSE;UINTN base;
         s=bs->HandleProtocol(handles[i],&ImageId,(VOID **)&image);
         if(s==EFI_UNSUPPORTED)continue;
-        if(s!=EFI_SUCCESS||!image||!image->ImageBase||!image->ImageSize||image->ImageSize>16u*1024u*1024u||
-           (UINTN)image->ImageBase>MAX_UINTN-image->ImageSize){complete=FALSE;continue;}
+        if(s!=EFI_SUCCESS){ScanIssue(&scan,i,s,"image_query_failed",TRUE);complete=FALSE;continue;}
+        if(!image){ScanIssue(&scan,i,s,"null_image_protocol",TRUE);complete=FALSE;continue;}
+        scan.registered++;
+        if(!image->ImageBase||!image->ImageSize||(UINTN)image->ImageBase>MAX_UINTN-image->ImageSize){
+            ScanIssue(&scan,i,s,"invalid_image_range",TRUE);complete=FALSE;continue;
+        }
         base=(UINTN)image->ImageBase;
         for(j=0;j<n;j++)if(callbacks[j].address>=base&&callbacks[j].address-base<image->ImageSize)matched=TRUE;
-        if(!matched)continue;
-        if(captured_images>=32){complete=FALSE;continue;}captured_images++;
+        /* A large image not containing any captured callback needs numerical
+         * coverage only. Never read its PE, path or code, including self/BSS. */
+        if(!matched){if(image->ImageSize>16u*1024u*1024u)scan.large_unmatched++;continue;}
+        if(captured_images>=32){ScanIssue(&scan,i,s,"matched_image_limit",TRUE);complete=FALSE;continue;}captured_images++;
         if(!first)TextPut(t,",");first=FALSE;
         TextPut(t,"{\"handle\":");TextDec(t,i);TextPut(t,",\"base\":");TextHex(t,base,16);
         TextPut(t,",\"image_bytes\":");TextDec(t,image->ImageSize);TextPut(t,",\"code_type\":");TextDec(t,image->ImageCodeType);
+        if(image->ImageSize>16u*1024u*1024u) {
+            ScanIssue(&scan,i,s,"matched_image_exceeds_code_limit",FALSE);complete=FALSE;
+            TextPut(t,",\"file_path\":null,\"code\":null}");continue;
+        }
         TextPut(t,",\"file_path\":");path_n=0;
         if(image->FilePath){BOOLEAN multi=FALSE;if(DpMeasure((UINT8 *)image->FilePath,PROBE_DP_MAX,&path_n,&multi)&&!multi)TextBytes(t,(UINT8 *)image->FilePath,path_n);else TextPut(t,"null");}
         else TextPut(t,"null");
         TextPut(t,",\"code\":");ImageCode(t,image,budget);TextPut(t,"}");
     }
-    TextPut(t,"],\"observation_complete\":");TextPut(t,complete?"true":"false");
+    TextPut(t,"],\"image_scan\":{\"range_complete\":");TextPut(t,scan.range_complete?"true":"false");
+    TextPut(t,",\"registered_images\":");TextDec(t,scan.registered);
+    TextPut(t,",\"large_unmatched_images\":");TextDec(t,scan.large_unmatched);
+    TextPut(t,",\"issue_count\":");TextDec(t,scan.count);
+    TextPut(t,",\"issues_truncated\":");TextPut(t,scan.count>scan.stored?"true":"false");
+    TextPut(t,",\"issues\":[");
+    for(i=0;i<scan.stored;i++) {
+        if(i)TextPut(t,",");TextPut(t,"{\"handle\":");TextDec(t,scan.issues[i].handle);
+        TextPut(t,",\"status\":");TextHex(t,scan.issues[i].status,16);
+        TextPut(t,",\"reason\":\"");TextPut(t,scan.issues[i].reason);TextPut(t,"\"}");
+    }
+    TextPut(t,"]},\"observation_complete\":");TextPut(t,complete?"true":"false");
     TextPut(t,",\"callbacks_invoked\":false,\"atomic_snapshot\":false,\"release_authorized\":false}");
 }
 void SamplePlatform(TEXT *t,EFI_SYSTEM_TABLE *st,EFI_HANDLE target,EFI_HANDLE self,EFI_FILE_PROTOCOL *log,const LOG_SOURCE *opened) {

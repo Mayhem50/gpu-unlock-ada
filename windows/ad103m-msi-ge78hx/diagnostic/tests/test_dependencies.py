@@ -136,3 +136,25 @@ class DependenciesTests(unittest.TestCase):
         d={'platform':json.loads(file.read_text())};r=observation(d)
         self.assertTrue(r['resolved'],r['reason'])
         self.assertEqual(len(r['normalized']['callbacks']),24)
+
+    def test_actual_c_real_size_self_image_needs_no_code_read(self):
+        file=ROOT/'build/platform-dependencies-large-self.json'
+        if not file.exists():self.skipTest('Run the CPU platform suite first')
+        d={'platform':json.loads(file.read_text())};r=observation(d)
+        self.assertTrue(r['resolved'],r['reason'])
+        self.assertEqual(r['image_scan']['large_unmatched_images'],1)
+
+    def test_image_scan_errors_cannot_be_hidden_by_overall_flag(self):
+        for reason in ('image_query_failed','null_image_protocol','invalid_image_range',
+                       'matched_image_exceeds_code_limit','matched_image_limit'):
+            d=fixture();d['platform']['dependencies']['image_scan']=dict(
+                range_complete=True,issue_count=1,issues_truncated=False,
+                issues=[dict(handle=4,status=ZERO,reason=reason)])
+            r=observation(d);self.assertFalse(r['resolved']);self.assertIn(reason,r['reason'])
+
+    def test_old_capture_five_incomplete_flag_is_not_reinterpreted(self):
+        file=ROOT.parent/'captures/2026-10-28-run5/CAP0005.JSON'
+        if not file.exists():self.skipTest('Private capture 5 not available')
+        r=observation(json.loads(file.read_text(encoding='utf-8-sig')))
+        self.assertFalse(r['resolved'])
+        self.assertEqual(r['reason'],'incomplete or incompatible observation')

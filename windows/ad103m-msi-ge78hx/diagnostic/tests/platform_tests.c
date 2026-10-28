@@ -43,7 +43,10 @@ static EFI_STATUS EFIAPI Handle(EFI_HANDLE h,EFI_GUID *guid,VOID **out) {
     } else if(h==H(3)&&BytesEqual(guid,&DriverGuid,16))*out=&Binding;
     else if(h==H(4)&&Mode>=4&&Mode!=8&&BytesEqual(guid,&DriverGuid,16))*out=&BoundaryBinding;
     else if(h==H(3)&&BytesEqual(guid,&LoadedGuid,16)){if(Mode==25)return EFI_DEVICE_ERROR;*out=&Image;}
-    else if(Mode>=20&&h==H(4)&&BytesEqual(guid,&LoadedGuid,16))*out=&OwnImage;
+    else if(Mode>=20&&h==H(4)&&BytesEqual(guid,&LoadedGuid,16)) {
+        if(Mode==37)return EFI_SUCCESS;
+        *out=&OwnImage;if(Mode==38)return EFI_WARN_UNKNOWN_GLYPH;
+    }
     else if(Mode==32&&(UINTN)h>=5&&BytesEqual(guid,&LoadedGuid,16))*out=&Image;
     else if(Mode>=20&&h==H(1)&&BytesEqual(guid,&OutGuid,16))*out=&Out;
     else if(Mode>=20&&h==H(2)&&BytesEqual(guid,&InGuid,16))*out=&In;
@@ -130,7 +133,7 @@ static void TestDependencies(void) {
     bs.LocateHandleBuffer=Locate;bs.HandleProtocol=Handle;bs.FreePool=Free;bs.ProtocolsPerHandle=Protocols;bs.OpenProtocolInformation=Opens;
     st.BootServices=&bs;st.ConsoleOutHandle=st.StandardErrorHandle=H(1);st.ConsoleInHandle=H(2);
     st.ConOut=st.StdErr=&Out;st.ConIn=&In;
-    for(Mode=20;Mode<=32;Mode++) {
+    for(Mode=20;Mode<=38;Mode++) {
         SetupPe();memcpy(OwnPe,Pe,sizeof(Pe));OwnImage=Image;OwnImage.ImageBase=OwnPe;OwnImage.DeviceHandle=H(2);
         Image.ImageBase=Pe;Image.ImageSize=sizeof(Pe);
         Out.Reset=(EFI_TEXT_RESET)(UINTN)(Pe+0x200);Out.OutputString=(EFI_TEXT_STRING)(UINTN)(Pe+0x201);
@@ -147,6 +150,17 @@ static void TestDependencies(void) {
         if(Mode==24)Image.ImageBase=(VOID *)(MAX_UINTN-10); /* reject before PE read */
         if(Mode==27)st.ConOut=(EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *)(UINTN)1; /* reject before table read */
         if(Mode==29)Log.Close=NULL;
+        if(Mode==33||Mode==35) {
+            /* Real probe BSS size with an unrelated, deliberately unreadable
+             * image/path address. No allocation/PE read of this range is legal. */
+            OwnImage.ImageBase=(VOID *)(UINTN)(Mode==33?0x10000000:1);
+            OwnImage.ImageSize=68214784;OwnImage.FilePath=(EFI_DEVICE_PATH_PROTOCOL *)(UINTN)1;
+        }
+        if(Mode==34) {
+            OwnImage.ImageBase=(VOID *)((UINTN)Pe-64);OwnImage.ImageSize=68214784;
+            OwnImage.FilePath=(EFI_DEVICE_PATH_PROTOCOL *)(UINTN)1;
+        }
+        if(Mode==36){OwnImage.ImageBase=(VOID *)(MAX_UINTN-10);OwnImage.ImageSize=68214784;}
         source.opened=TRUE;source.volume=Mode==30?H(1):H(2);Sha256(Usb,sizeof(Usb),source.path_sha256);
         if(Mode==31)source.path_sha256[0]^=1;
         TextInit(&t,data,sizeof(data));SamplePlatform(&t,&st,H(1),H(4),Mode==28?NULL:&Log,&source);
@@ -155,7 +169,25 @@ static void TestDependencies(void) {
             CHECK(strstr(data,"\"observation_complete\":true"));CHECK(strstr(data,"\"usb\":true"));
             file=fopen("build/platform-dependencies.json","wb");CHECK(file);CHECK(fwrite(data,1,t.len,file)==t.len);CHECK(fclose(file)==0);
         }
-        if(Mode>=24)CHECK(strstr(data,"\"observation_complete\":false"));
+        if(Mode>=24&&Mode!=33&&Mode!=35)CHECK(strstr(data,"\"observation_complete\":false"));
+        if(Mode==33||Mode==35) {
+            CHECK(strstr(data,"\"observation_complete\":true"));
+            CHECK(strstr(data,"\"large_unmatched_images\":1"));
+            CHECK(strstr(data,"\"issue_count\":0"));
+            if(Mode==33) {
+                file=fopen("build/platform-dependencies-large-self.json","wb");CHECK(file);
+                CHECK(fwrite(data,1,t.len,file)==t.len);CHECK(fclose(file)==0);
+            }
+        }
+        if(Mode==34) {
+            CHECK(strstr(data,"matched_image_exceeds_code_limit"));
+            CHECK(strstr(data,"\"range_complete\":true"));
+        }
+        if(Mode==24||Mode==36)CHECK(strstr(data,"invalid_image_range"));
+        if(Mode==25)CHECK(strstr(data,"image_query_failed"));
+        if(Mode==37)CHECK(strstr(data,"null_image_protocol"));
+        if(Mode==38)CHECK(strstr(data,"image_query_failed"));
+        if(Mode==32)CHECK(strstr(data,"matched_image_limit"));
     }
 }
 int main(void){TestPe();TestGraph();TestDependencies();printf("PASS: %u platform PE/ownership checks; read-only host mocks.\n",Checks);return 0;}

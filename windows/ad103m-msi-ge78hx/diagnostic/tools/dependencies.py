@@ -39,6 +39,12 @@ def observation(data):
             'storage_ownership_proved':False,'quiescence_proved':False}
     if d is None:return result
     try:
+        scan=d.get('image_scan')
+        if scan is not None:
+            result['image_scan']=scan
+            if (scan.get('range_complete') is not True or scan.get('issue_count')!=0 or
+                type(scan.get('issue_count')) is not int or scan.get('issues')!=[] or scan.get('issues_truncated') is not False):
+                raise ValueError('image scan incomplete: '+','.join(i.get('reason','unknown') for i in scan.get('issues',[])))
         if (d.get('observation_complete') is not True or d.get('callbacks_invoked') is not False or
             d.get('atomic_snapshot') is not False or d.get('release_authorized') is not False):
             raise ValueError('incomplete or incompatible observation')

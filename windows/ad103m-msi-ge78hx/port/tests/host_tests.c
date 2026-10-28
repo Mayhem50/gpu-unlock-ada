@@ -358,6 +358,10 @@ static void profile_tests(void) {
     memcpy(M.observation.reg,CaptureRegisters1,sizeof(M.observation.reg));
     CHECK(msi_profile(&M.observation,Prom,1048576));
     MsiObservation valid=M.observation;
+    /* Capture 5: new stock SS0 is evidence, never automatic admission. */
+    M.observation.reg[REG_SS0]=0x04203025u;
+    CHECK(!msi_profile(&M.observation,Prom,1048576));
+    M.observation=valid;
     for(unsigned i=0;i<22;i++) {
         M.observation=valid;M.observation.reg[i]^=1;
         /* SS0 has precisely two observed values, not a permissive mask. */
@@ -436,6 +440,12 @@ static void ownership_tests(void) {
     now=base;now.console_alive=false;CHECK(!msi_graph_stage(&base,&now,0,false));
     now=base;now.exclusive=true;CHECK(!msi_graph_stage(&base,&now,0,false));
 }
+static void capture5_refusal_test(void) {
+    setup(OK);M.observation.reg[REG_SS0]=0x04203025u;MsiOps o=ops();Scenarios++;
+    msi_run(&o,&S,&M.observation,Prom,1048576,&SyntheticApproval,true);
+    CHECK(!M.stops&&!M.claims&&!M.transactions&&!M.flr_written&&!M.raw_reset_effects);
+    CHECK(!M.silenced&&!M.windows&&!S.mutated&&!S.started);
+}
 #include "regression_tests.h"
 #include "followup_regressions.h"
 #include "method_regressions.h"
@@ -446,7 +456,7 @@ static void ownership_tests(void) {
 int main(void) {
     FILE *f=fopen("build/prom.bin","rb");CHECK(f!=NULL);Prom=malloc(1048576);CHECK(Prom);
     CHECK(fread(Prom,1,1048576,f)==1048576&&fgetc(f)==EOF);fclose(f);
-    profile_tests();ownership_tests();workflow_tests();regression_tests();followup_regressions();method_regressions();lifecycle_regressions();retention_regressions();dma_regressions();timing_regressions();free(Prom);
+    profile_tests();ownership_tests();capture5_refusal_test();workflow_tests();regression_tests();followup_regressions();method_regressions();lifecycle_regressions();retention_regressions();dma_regressions();timing_regressions();free(Prom);
     printf("PASS: %u host assertions, %u workflow scenarios.\n",Checks,Scenarios);
     puts("ROM/FWSEC profile, staged release, FLR quiet time/restore, DMA retention and Windows invocation: mocked only.");
     puts("No GPU access, firmware execution, payload or native UEFI backend; real candidate remains refused.");
