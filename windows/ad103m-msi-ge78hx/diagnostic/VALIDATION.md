@@ -86,3 +86,10 @@ independently approved future capture. The previous local image/manifest is
 archived before rebuild; the USB Stage A is not replaced. Read-only snapshots
 cannot qualify FLR recovery, establish iGPU recovery after a failed transaction,
 or prove unlock support. Keep historical captures and their own manifests.
+
+Version 0.4.4 includes the capture-5 classification correction: large unrelated
+image ranges require no PE/path/code reads. Relevant oversized images, invalid
+ranges and missing metadata still refuse with explicit image_scan diagnostics.
+Offline validation: 7,925 application / 722 platform checks, 68 Python tests.
+No SS0 admission was widened. Native build/staging are separate from execution;
+no corrected probe or unlock is executed during preparation.

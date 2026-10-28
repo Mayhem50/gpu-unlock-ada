@@ -10,15 +10,15 @@ foreach($key in $good.Keys) {
  $refused=$false;try{Assert-DiagnosticUsb ([pscustomobject]$bad) $pin}catch{$refused=$true}
  if(-not $refused){throw ('Did not refuse changed USB '+$key)};$cases++
 }
-$m=[ordered]@{version='0.4.3';binary='AD103M-PROBE.EFI';tests_passed=$true;packet_ready=$true;execution_approved=$false;gpu_write_capability=$false;unlock_capability=$false;build_id='e704259c189d3cd164212337e4df016ea32f43da0ee416e96cc824e6805435ab';sha256='2463cfd10c1524f04b4b4c91b87412d483fa2dccc254d991f07a892647e6cb6c'}
-Assert-DiagnosticPacket ([pscustomobject]$m) $m.sha256 37888;$cases++
+$m=[ordered]@{version='0.4.4';binary='AD103M-PROBE.EFI';tests_passed=$true;packet_ready=$true;execution_approved=$false;gpu_write_capability=$false;unlock_capability=$false;build_id='5be4190808ab2fd9c320ec7018b066f5d75922de4df2fd093f189f9adf72afc3';sha256='a97ebe9678e0d786ec12fdf32885415d51ed62f63e3243504ab2b38b999328f2'}
+Assert-DiagnosticPacket ([pscustomobject]$m) $m.sha256 38912;$cases++
 foreach($key in $m.Keys) {
  $bad=[ordered]@{};foreach($k in $m.Keys){$bad[$k]=$m[$k]}
  $bad[$key]=if($m[$key] -is [bool]){-not $m[$key]}else{'incorrect'}
- $refused=$false;try{Assert-DiagnosticPacket ([pscustomobject]$bad) $m.sha256 37888}catch{$refused=$true}
+ $refused=$false;try{Assert-DiagnosticPacket ([pscustomobject]$bad) $m.sha256 38912}catch{$refused=$true}
  if(-not $refused){throw ('Did not refuse changed packet '+$key)};$cases++
 }
-foreach($check in @(@('bad-hash',37888),@($m.sha256,1))) {
+foreach($check in @(@('bad-hash',38912),@($m.sha256,1))) {
  $refused=$false;try{Assert-DiagnosticPacket ([pscustomobject]$m) $check[0] $check[1]}catch{$refused=$true}
  if(-not $refused){throw 'Changed packet bytes admitted'};$cases++
 }

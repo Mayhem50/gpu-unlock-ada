@@ -3,7 +3,7 @@
 #define AD104_CORE_H
 #include <Uefi.h>
 
-#define PROBE_VERSION "0.4.3"
+#define PROBE_VERSION "0.4.4"
 #define PROBE_DP_MAX 4096u
 #define PROBE_ROM_MAX (4u * 1024u * 1024u)
 typedef struct { CHAR8 *data; UINTN cap, len; BOOLEAN failed; } TEXT;

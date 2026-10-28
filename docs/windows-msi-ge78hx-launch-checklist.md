@@ -4,7 +4,8 @@ Updated 2026-10-28 after the host DMA/timing work and UEFI feasibility review. T
 not an execution packet. Checked means the stated evidence exists, not that
 the machine is qualified for unlock. Open items block the relevant next stage.
 Current scope: source/CPU validation, host-tested read-only PCI adapter
-foundation and a local diagnostic 0.4.3 build/packet. Stage A has an operator-reported successful return to Windows;
+foundation and the [corrected diagnostic 0.4.4 build/USB preparation](windows-msi-ge78hx-diagnostic-v044-deployment.md).
+Stage A has an operator-reported successful return to Windows;
 no assistant EFI launch, GPU query/mutation, unlock or boot-protection change.
 Stage A does not detach/reset the GPU. The adapter foundation is not bootable.
 
@@ -17,6 +18,10 @@ The [offline correction and SS0 analysis](windows-msi-ge78hx-capture5-remediatio
 separates unrelated large images from code-reading limits. It preserves capture
 5's unknown result and adds an explicit regression refusing its new SS0 value.
 Corrected sources have not been rebuilt/staged as EFI.
+Subsequent explicit authorization prepared and staged 0.4.4 after all offline
+checks, with a verified backup of the actual USB 0.4.3 image/manifest. No 0.4.4
+execution occurred. The preceding source-only statement describes the original
+correction review, not current media state.
 A complete checklist is not a completed checklist or a guarantee of recovery.
 
 External comparison: [nv-uefi-unlocker v0.2.0 audit](windows-msi-ge78hx-nv-uefi-v020-audit.md).

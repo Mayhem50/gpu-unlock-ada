@@ -35,7 +35,7 @@ def inputs(root):
 
 
 def verify(root,manifest):
-    if (manifest.get('version')!='0.4.3' or manifest.get('binary')!='AD103M-PROBE.EFI' or
+    if (manifest.get('version')!='0.4.4' or manifest.get('binary')!='AD103M-PROBE.EFI' or
         manifest.get('tests_passed') is not True or manifest.get('packet_ready') is not True or
         manifest.get('gpu_write_capability') is not False or manifest.get('unlock_capability') is not False or
         manifest.get('execution_approved') is not False):
@@ -52,7 +52,7 @@ def verify(root,manifest):
     binary=root/'build/AD103M-PROBE.EFI'
     if digest(binary)!=manifest['sha256']:raise ValueError('Binary digest mismatch')
     raw=binary.read_bytes();validate_pe(raw)
-    if manifest['build_id'].encode() not in raw or b'0.4.3' not in raw:
+    if manifest['build_id'].encode() not in raw or b'0.4.4' not in raw:
         raise ValueError('Compiled build/version identity missing')
     if set(manifest.get('build_files_sha256',{}))!={'build/build_id.h','build/compile.cmd'}:
         raise ValueError('Missing generated build provenance')
@@ -83,12 +83,12 @@ def seal(root):
 
 def make_packet(root,manifest):
     verify(root,manifest)
-    folder=root/'build/packets'/('diagnostic-0.4.3-'+manifest['sha256'][:16])
+    folder=root/'build/packets'/('diagnostic-0.4.4-'+manifest['sha256'][:16])
     folder.mkdir(parents=True,exist_ok=False)
     for name in ('AD103M-PROBE.EFI','manifest.json'):
         with (folder/name).open('xb') as stream:stream.write((root/'build'/name).read_bytes())
     if digest(folder/'AD103M-PROBE.EFI')!=manifest['sha256']:raise ValueError('Packet copy mismatch')
-    text=('DIAGNOSTIC MSI GE78HX v0.4.3 — PAQUET LOCAL NON EXECUTE\n'
+    text=('DIAGNOSTIC MSI GE78HX v0.4.4 — PAQUET LOCAL NON EXECUTE\n'
           'SHA256 : '+manifest['sha256']+'\nBuild ID : '+manifest['build_id']+'\n'
           'Ce paquet ne contient aucun unlock, reset, detachement GOP ou changement des protections.\n'
           'Il contient les lectures PCI/MMIO/PROM bornees de la sonde precedente et la collecte passive des dependances.\n'
@@ -98,7 +98,7 @@ def make_packet(root,manifest):
           'l etat courant Secure Boot/BitLocker, le travail sauvegarde et l alimentation secteur.\n'
           'Ne pas coller de cle de recuperation dans le rapport. Conserver les captures 3/4 et leurs manifestes.\n'
           'Une future mise sur USB doit sauvegarder et verifier le Stage A actuel, sans formater ni modifier le boot interne.\n'
-          'Au futur essai approuve, verifier la banniere diagnostic v0.4.3 et recuperer le nouveau CAP avec CE manifeste.\n'
+          'Au futur essai approuve, verifier la banniere diagnostic v0.4.4 et recuperer le nouveau CAP avec CE manifeste.\n'
           'Un rapport incomplet reste indetermine ; ne pas tenter de lecture forcee, reset ou unlock.\n')
     with (folder/'LIRE-AVANT-TEST.txt').open('x',encoding='utf-8') as stream:stream.write(text)
     return folder

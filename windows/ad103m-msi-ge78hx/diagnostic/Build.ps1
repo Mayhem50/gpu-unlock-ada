@@ -86,7 +86,7 @@ foreach($name in @('compiler','linker')) {
     $toolchain[$name]=[ordered]@{path=$path;sha256=(Get-FileHash -LiteralPath $path).Hash.ToLowerInvariant();version=(Get-Item -LiteralPath $path).VersionInfo.FileVersion}
 }
 $toolchain['vcvars']=[ordered]@{path=$VcVars;sha256=(Get-FileHash -LiteralPath $VcVars).Hash.ToLowerInvariant()}
-$manifest = [ordered]@{ version='0.4.3'; build_id=$buildId; binary='AD103M-PROBE.EFI'; sha256=(Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant(); source_sha256=$sourceHashes;toolchain=$toolchain; tests_passed=$true;deployed=$false;firmware_executed=$false;hardware_tested=$false; gpu_write_capability=$false; mmio_read_capability=$true; validation='MSVC host mocks and PE checks'; utc=[DateTime]::UtcNow.ToString('o') }
+$manifest = [ordered]@{ version='0.4.4'; build_id=$buildId; binary='AD103M-PROBE.EFI'; sha256=(Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant(); source_sha256=$sourceHashes;toolchain=$toolchain; tests_passed=$true;deployed=$false;firmware_executed=$false;hardware_tested=$false; gpu_write_capability=$false; mmio_read_capability=$true; validation='MSVC host mocks and PE checks'; utc=[DateTime]::UtcNow.ToString('o') }
 $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $buildDir 'manifest.json') -Encoding utf8
 $qualification = [ordered]@{
  target='10de:2717/1462:13cd/a1'; expected_chip='0x193000a1'; chip_observed_on_hardware=$false

@@ -3,15 +3,15 @@
 Latest offline correction: numeric coverage of an unrelated large image no
 longer requires reading its code. Relevant large images, malformed ranges and
 missing enumeration evidence still refuse, with explicit scan diagnostics.
-This correction is **source/host-tested only** and is not in the deployed 0.4.3
-binary. The sealed historical packet is stale relative to modified sources;
-do not stage it as a build of this correction. See the
+This correction is prepared in **0.4.4**, with offline regression validation
+before USB staging. It is not present in the historical 0.4.3 binary used for
+capture 5. Never use the new manifest for that older capture. See the
 [capture 5 correction and SS0 analysis](../../../docs/windows-msi-ge78hx-capture5-remediation.md).
 
 Prepared offline for PCI 10DE:2717 / 1462:13CD / revision A1. This is a
 diagnostic build with no unlock code or NVIDIA firmware linked. The operator
 executed previous versions for captures 3/4. Current source includes a new
-boundary identities and passive dependencies. Version 0.4.3 is prepared as a
+boundary identities and passive dependencies. Version 0.4.4 is prepared as a
 local native build and packet, with CPU tests; it is not staged or run. It is not qualified
 for driver release, reset or unlock.
 

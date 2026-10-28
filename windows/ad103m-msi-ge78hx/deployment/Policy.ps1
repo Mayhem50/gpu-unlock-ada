@@ -9,13 +9,13 @@ function Assert-DiagnosticUsb($Observed,$Pin) {
     }
 }
 function Assert-DiagnosticPacket($Manifest,[string]$Hash,[long]$Bytes) {
-    if($Manifest.version -cne '0.4.3' -or $Manifest.binary -cne 'AD103M-PROBE.EFI' -or
+    if($Manifest.version -cne '0.4.4' -or $Manifest.binary -cne 'AD103M-PROBE.EFI' -or
        $Manifest.tests_passed -cne $true -or $Manifest.packet_ready -cne $true -or
        $Manifest.execution_approved -cne $false -or $Manifest.gpu_write_capability -cne $false -or
        $Manifest.unlock_capability -cne $false -or
-       $Manifest.build_id -cne 'e704259c189d3cd164212337e4df016ea32f43da0ee416e96cc824e6805435ab' -or
-       $Manifest.sha256 -cne '2463cfd10c1524f04b4b4c91b87412d483fa2dccc254d991f07a892647e6cb6c' -or
-       $Hash -cne $Manifest.sha256 -or $Bytes -ne 37888) {
+       $Manifest.build_id -cne '5be4190808ab2fd9c320ec7018b066f5d75922de4df2fd093f189f9adf72afc3' -or
+       $Manifest.sha256 -cne 'a97ebe9678e0d786ec12fdf32885415d51ed62f63e3243504ab2b38b999328f2' -or
+       $Hash -cne $Manifest.sha256 -or $Bytes -ne 38912) {
         throw 'Not the reviewed diagnostic packet; refuse staging'
     }
 }

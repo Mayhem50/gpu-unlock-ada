@@ -1,4 +1,4 @@
-MSI GE78HX — PAQUET DIAGNOSTIC 0.4.3, ESSAI FUTUR DISTINCT
+MSI GE78HX — PAQUET DIAGNOSTIC 0.4.4, ESSAI FUTUR DISTINCT
 
 Preparation locale uniquement. Ne pas lancer ce paquet maintenant.
 La cle USB conserve Stage A. Aucun unlock, reset ou detachement GOP inclus.
@@ -9,18 +9,18 @@ sont conservees ; ce n'est pas un diagnostic sans acces GPU lorsqu'il est lance.
 Seul son propre journal CAPxxxx.JSON est ecrit sur le volume USB de lancement.
 
 Avant une future installation/validation explicite :
-- Verifier version 0.4.3, SHA256 et build_id du paquet et ses tests hors ligne.
+- Verifier version 0.4.4, SHA256 et build_id du paquet et ses tests hors ligne.
 - Sauvegarder et verifier l'actuel Stage A avant toute copie sur USB.
 - Ne pas formater la cle, changer BCD/BootOrder, BIOS/VBIOS/pilote ou mode GPU.
 - Verifier l'etat courant Secure Boot/BitLocker et l'acces independant a la cle
   de recuperation. Ne jamais recopier cette cle dans le rapport.
 - Sauvegarder le travail, fermer les charges GPU et brancher le secteur.
 - Conserver les captures 3/4 et leurs propres manifestes. Ne pas reutiliser le
-  manifeste 0.4.3 pour analyser une ancienne capture.
+  manifeste 0.4.4 pour analyser une ancienne capture.
 
 Seulement lors de l'essai distinct autorise, documenter l'arret/demarrage et
 le mode GPU reel. Un arret complet ne prouve pas la coupure des rails du GPU.
-Verifier au menu F11 le support choisi et la banniere diagnostic v0.4.3.
+Verifier au menu F11 le support choisi et la banniere diagnostic v0.4.4.
 La sonde demarre directement si elle a ete volontairement installee comme
 fallback USB ; elle ne demande pas W comme Stage A. Ne pas confondre les deux.
 

@@ -20,10 +20,10 @@ class PacketTests(unittest.TestCase):
                        '../../ad104-msi/vendor/edk2/headers.json':'3'*64}
         identity='probe.c='+'1'*64+'\nheaders='+'3'*64+'\nbuild='+'2'*64
         build_id=hashlib.sha256(identity.encode()).hexdigest()
-        (build/'AD103M-PROBE.EFI').write_bytes(b'FAKE UNIT TEST IMAGE 0.4.3 '+build_id.encode())
+        (build/'AD103M-PROBE.EFI').write_bytes(b'FAKE UNIT TEST IMAGE 0.4.4 '+build_id.encode())
         for name in ('build_id.h','compile.cmd'):(build/name).write_text('unit test only')
         tool=build/'fake-tool';tool.write_bytes(b'not executable')
-        m=dict(version='0.4.3',binary='AD103M-PROBE.EFI',tests_passed=True,packet_ready=True,
+        m=dict(version='0.4.4',binary='AD103M-PROBE.EFI',tests_passed=True,packet_ready=True,
                gpu_write_capability=False,unlock_capability=False,execution_approved=False,
                sha256=packet.digest(build/'AD103M-PROBE.EFI'),build_id=build_id,
                inputs_sha256=self.snapshot,source_sha256={'probe.c':'1'*64},
@@ -68,9 +68,9 @@ class PacketTests(unittest.TestCase):
                 with self.assertRaises(ValueError):packet.make_packet(root,m)
                 self.assertFalse((root/'build/packets').exists())
 
-    def test_v043_retains_strict_bar_validation(self):
+    def test_v044_retains_strict_bar_validation(self):
         d=json.loads((ROOT/'build/host-capture.json').read_text())
-        d['probe_version']='0.4.3'
+        d['probe_version']='0.4.4'
         analyze(d,d['build_id'])
         d['display_devices'][0]['bars'][0]['uefi_index']=99
         with self.assertRaises(ValueError):analyze(d,d['build_id'])
