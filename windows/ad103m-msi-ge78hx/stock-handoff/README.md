@@ -88,8 +88,10 @@ services. The native entry's pause loop is compiled/inspected, not executed.
 
 The verifier checks the EFI PE, header pins, authenticated image pin and an
 explicit firmware-call whitelist. Source checking is supplementary to review;
-it is not a formal proof of firmware behavior. This application has not been
-tested on the physical MSI. It does not resolve GPU-port T2/T5–T9 or validate
+it is not a formal proof of firmware behavior. On 2026-10-28 the operator
+reported a successful manual Stage A test ("tout est OK"). This is an operator
+report, without a captured execution trace or independent driver check; build
+manifests retain their software-only fields. It does not resolve GPU-port T2/T5–T9 or validate
 GOP release, an FLR, DMA quiescence or Windows recovery after those operations.
 
 ## USB staging — separate from execution

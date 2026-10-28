@@ -21,10 +21,14 @@ bootable and does not contain an executable unlock backend.
 The separate [Stage A stock handoff](stock-handoff/README.md) is now built for
 a first normal Windows boot test: it has no GPU protocols, DMA, release/reset
 or unlock. Its USB staging helper is gated on the actual ESP fingerprint and
-verified removable-media identity. It has not been executed on firmware;
+verified removable-media identity. On 2026-10-28 the operator reported a
+successful manual Stage A test; there is no captured execution/driver trace.
 the current profile is tied to the operator-reported ESP fingerprint and an
 identical authenticated component-store image. Current security/recovery checks
-and the physical test are separate from this source/build evidence.
+and future physical trials are separate from this source/build evidence.
+The [adapter foundation](adapter/README.md) now host-tests read-only PCI
+admission using actual UEFI protocol types. It has no EFI entry point, native
+execution or write/reset/unlock path, and is not connected to the USB build.
 `build/`, `local/`, and `captures/` are
 ignored because captures can include proprietary firmware and machine-specific
 data.

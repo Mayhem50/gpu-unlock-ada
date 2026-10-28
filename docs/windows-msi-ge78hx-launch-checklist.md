@@ -3,9 +3,10 @@
 Updated 2026-10-28 after the host DMA/timing work and UEFI feasibility review. This is a gate register,
 not an execution packet. Checked means the stated evidence exists, not that
 the machine is qualified for unlock. Open items block the relevant next stage.
-Current scope: source/CPU validation and preparation of the separate Stage A
-stock Windows handoff application. No EFI launch, GPU query/mutation, GPU unlock
-adapter, unlock or boot-protection change. Stage A does not detach/reset the GPU.
+Current scope: source/CPU validation and host-tested read-only PCI adapter
+foundation. Stage A has an operator-reported successful return to Windows;
+no assistant EFI launch, GPU query/mutation, unlock or boot-protection change.
+Stage A does not detach/reset the GPU. The adapter foundation is not bootable.
 
 See the [method alignment review](windows-msi-ge78hx-method-alignment.md).
 A complete checklist is not a completed checklist or a guarantee of recovery.
@@ -85,6 +86,11 @@ this MSI model validation. Their scenario counts are not MSI coverage.
 - [ ] **P3:** bind exclusive PCI I/O interface, protocol IO/MEM/BME attributes,
   logical BAR descriptors and hardware command consistently. Review any status
   exception independently instead of widening admission masks.
+  First [adapter admission component](../windows/ad103m-msi-ge78hx/adapter/README.md):
+  actual EDK2 ABI, read-only Supported/Get, command/attribute namespace agreement,
+  BME-off and two complete stable config/location observations are host-tested
+  (148 cases / 3,211 assertions). No discovery, exclusive claim, BAR resources or
+  native execution exists; this does not close P3 or authorize mutation.
 - [ ] **P4:** pin private Windows manager bytes, origin, ESP/device path,
   loaded-image handle/options and stock fallback. Read-only ESP discovery is
   not installation; never reuse AD104 partition GUID/hash values.
@@ -162,7 +168,14 @@ this MSI model validation. Their scenario counts are not MSI coverage.
   Windows reports Secure Boot disabled in its registry view; the non-admin
   process could not read BitLocker status. No protection was changed. Staging
   still refuses an unconfirmed fingerprint on any future rebuild.
-- [ ] **A2:** manually demonstrate normal Windows handoff/display/input.
+  Operator subsequently reported C: fully encrypted/unlocked with protection
+  suspended on 2026-10-28. Independent recovery-key access was reported earlier;
+  no secret is stored here. Recheck security/recovery before any later trial.
+- [x] **A2 operator report, 2026-10-28:** after the manual Stage A instructions,
+  the operator reported "tout est OK". This is a reported successful return,
+  not an independently observed banner/W/Windows trace or driver check. No
+  USB execution log exists for Stage A; no physical result is inferred from
+  the build manifest's software-only fields.
   This is not the release/reset test below and cannot close T2/T5–T9 or V1–V4.
 
 - [ ] **V1:** explicit stock/no-unlock mode and stock postconditions.
