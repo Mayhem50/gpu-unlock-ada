@@ -18,6 +18,11 @@ The [capture 6 review](windows-msi-ge78hx-capture6-review.md) subsequently
 confirms complete passive callback observation under 0.4.4 and repeated external
 boundary identities against capture 5. Storage ownership/notification exclusion
 remain unproved; a fourth SS0 value is recorded without widening admission.
+The [capture-6 storage/callback audit](windows-msi-ge78hx-capture6-release-audit.md)
+identifies 13 protected storage edges, six missing storage DriverBinding/code
+identities, shared output/input image lifetime and callback/global/event gaps.
+It defines remaining Stage B requirements separately from unlock/reset work;
+no release-only binary is supplied or approved by this audit.
 The [offline correction and SS0 analysis](windows-msi-ge78hx-capture5-remediation.md)
 separates unrelated large images from code-reading limits. It preserves capture
 5's unknown result and adds an explicit regression refusing its new SS0 value.
