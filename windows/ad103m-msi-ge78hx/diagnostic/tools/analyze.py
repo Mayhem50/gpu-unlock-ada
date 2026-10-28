@@ -38,7 +38,7 @@ def validate_bar_layout(display):
 
 
 def analyze(data, build_id):
-    if data.get('schema') != 4 or data.get('probe_version') not in ('0.4.0','0.4.1','0.4.2'):
+    if data.get('schema') != 4 or data.get('probe_version') not in ('0.4.0','0.4.1','0.4.2','0.4.3'):
         raise ValueError('Unsupported capture schema/version')
     if data.get('build_id') != build_id:
         raise ValueError('Capture build_id does not match the selected manifest')
@@ -48,7 +48,7 @@ def analyze(data, build_id):
     displays = data.get('display_devices')
     if not isinstance(displays, list) or len(displays) > 32:
         raise ValueError('Malformed display inventory')
-    if data.get('probe_version')=='0.4.2':
+    if data.get('probe_version') in ('0.4.2','0.4.3'):
         for display in displays:
             validate_bar_layout(display)
     targets = [(i, d) for i, d in enumerate(displays)
@@ -88,7 +88,7 @@ def analyze(data, build_id):
         if sample.get('value') is not None and not re.fullmatch(r'0x[0-9a-f]{8}',sample['value']):
             raise ValueError('Malformed sampled register')
     result['register_classification']=snapshot.get('classification','legacy_or_unavailable')
-    if data.get('probe_version') in ('0.4.1','0.4.2'):
+    if data.get('probe_version') in ('0.4.1','0.4.2','0.4.3'):
         allowed=snapshot.get('prom_read_allowed',False)
         classification=snapshot.get('classification','blocked')
         if type(allowed) is not bool:

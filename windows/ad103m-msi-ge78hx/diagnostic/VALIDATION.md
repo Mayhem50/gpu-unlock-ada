@@ -71,9 +71,18 @@ local build/manifest.json. build/qualification.json records the distinction
 between successful host tests and unperformed hardware qualification.
 Build outputs and simulated captures are ignored by Git.
 
-This version 0.4.2 image is unsigned and has not been executed in firmware
-during this validation. Earlier operator captures established AD103 identity
-and a complete parsable ROM chain/FWSEC in the sampled PROM window.
-This corrected BAR mapping still needs its own capture. Read-only snapshots
+Version 0.4.3 adds boundary owner and passive callback/opened-log observations.
+It remains unsigned and is prepared locally without firmware execution or USB
+deployment. Offline suites pass 7,925 application / 605 platform checks and
+62 Python tests, plus identity/PE/source checks. Packet tests reject altered
+inputs/binary/toolchain/build identity, missing generated provenance and PE
+failure, and refuse overwriting an existing packet. The version-specific
+analyzer regression preserves the strict 0.4.2 BAR and SEC2 continuation rules.
+The compiled banner, JSON version, manifest and packet use 0.4.3 consistently.
+
+Earlier operator captures 3/4 established AD103 identity, a complete parsable
+ROM chain/FWSEC and corrected BAR mapping. The new observations still need an
+independently approved future capture. The previous local image/manifest is
+archived before rebuild; the USB Stage A is not replaced. Read-only snapshots
 cannot qualify FLR recovery, establish iGPU recovery after a failed transaction,
 or prove unlock support. Keep historical captures and their own manifests.

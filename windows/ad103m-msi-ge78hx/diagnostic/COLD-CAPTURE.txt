@@ -1,29 +1,36 @@
-MSI GE78HX - SECONDE CAPTURE PROM APRES ARRET COMPLET
-Sonde 0.4.2, diagnostic uniquement. Aucun unlock inclus.
+MSI GE78HX — PAQUET DIAGNOSTIC 0.4.3, ESSAI FUTUR DISTINCT
 
-Cette fiche ne lance aucune commande automatiquement.
-Conserver le meme mode dGPU, alimentation secteur, profil MSI et peripheriques
-que pour CAP0003. Ne pas changer le BIOS, le VBIOS ou le pilote.
-Verifier que la cle de recuperation BitLocker est accessible sur un autre
-appareil. Conserver les anciennes captures et leurs manifestes.
+Preparation locale uniquement. Ne pas lancer ce paquet maintenant.
+La cle USB conserve Stage A. Aucun unlock, reset ou detachement GOP inclus.
 
-1. Enregistrer le travail. Pour un arret complet Windows, sans /hybrid :
-   shutdown.exe /s /t 0
-2. Attendre l'extinction complete, puis environ 10 secondes.
-3. Rallumer et utiliser F11 au logo MSI. Choisir la Kingston en mode UEFI
-   uniquement pour cet essai volontaire. La sonde demarre directement.
-4. Laisser le rapport se sauvegarder. Retour au firmware apres 8 secondes.
-   Revenir sur Windows Boot Manager. Aucun nouvel essai automatique.
-5. Le prochain fichier devrait etre AD103M-PROBE/CAP0004.JSON.
-   Garder la cle branchee une fois dans Windows pour analyser ce rapport.
+Objectif : relever les trois proprietaires externes manquants et les origines
+des callbacks console/fichiers. Les lectures PCI/MMIO/PROM bornees existantes
+sont conservees ; ce n'est pas un diagnostic sans acces GPU lorsqu'il est lance.
+Seul son propre journal CAPxxxx.JSON est ecrit sur le volume USB de lancement.
 
-Cet arret complet ne prouve pas une coupure electrique des rails du GPU.
-Documenter la sequence suivie; le rapport permettra de comparer les etats.
-Verifier PROM SHA-256, geometrie FWSEC, registres critiques et correspondance
-des BAR. Les variations de SS0 sont conservees, pas effacees ou normalisees.
-Les indices PCI 0/1/3/5 doivent etre associes aux indices UEFI 0/1/2/3.
+Avant une future installation/validation explicite :
+- Verifier version 0.4.3, SHA256 et build_id du paquet et ses tests hors ligne.
+- Sauvegarder et verifier l'actuel Stage A avant toute copie sur USB.
+- Ne pas formater la cle, changer BCD/BootOrder, BIOS/VBIOS/pilote ou mode GPU.
+- Verifier l'etat courant Secure Boot/BitLocker et l'acces independant a la cle
+  de recuperation. Ne jamais recopier cette cle dans le rapport.
+- Sauvegarder le travail, fermer les charges GPU et brancher le secteur.
+- Conserver les captures 3/4 et leurs propres manifestes. Ne pas reutiliser le
+  manifeste 0.4.3 pour analyser une ancienne capture.
 
-Ne pas laisser les protections suspendues apres la session : retirer cette
-cle, reactiver Secure Boot dans le BIOS, verifier True dans Windows, puis
-reprendre BitLocker et verifier Protection activee. Ne supprimer aucune cle
-Secure Boot et ne pas effacer le TPM.
+Seulement lors de l'essai distinct autorise, documenter l'arret/demarrage et
+le mode GPU reel. Un arret complet ne prouve pas la coupure des rails du GPU.
+Verifier au menu F11 le support choisi et la banniere diagnostic v0.4.3.
+La sonde demarre directement si elle a ete volontairement installee comme
+fallback USB ; elle ne demande pas W comme Stage A. Ne pas confondre les deux.
+
+Attendre la sauvegarde du NOUVEAU CAPxxxx.JSON, sans presumer son numero.
+La sonde revient normalement au firmware apres 8 secondes. Revenir sur le
+Windows Boot Manager interne. Ne pas lancer d'unlock ni retenter automatiquement.
+Conserver rapport + manifeste + dernier message/statut et conditions de boot.
+Un blocage ou rapport incomplet reste un echec/indetermine ; ne pas forcer les
+lectures, modifier une protection ou essayer un reset pour contourner le refus.
+
+Apres l'essai, verifier le retour Windows, ecran/clavier et erreurs du pilote.
+Revoir la politique Secure Boot/BitLocker voulue en fin de session. Aucune
+protection n'est modifiee ou restauree automatiquement par ce paquet.

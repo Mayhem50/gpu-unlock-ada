@@ -4,6 +4,10 @@
 staged or executed; no GPU query, reset, release, unlock or protection change
 occurred. The Kingston's Stage A installation is not changed by this work.
 
+Subsequent preparation built the [local diagnostic 0.4.3 packet](windows-msi-ge78hx-diagnostic-v043-packet.md).
+That later build includes these extensions but is not deployed or executed.
+The source-only statements below describe the original preparation stage.
+
 ## Prepared capture
 
 The diagnostic source now includes an optional `platform.dependencies` object.

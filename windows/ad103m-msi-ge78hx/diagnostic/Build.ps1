@@ -14,6 +14,22 @@ if (-not (Test-Path -LiteralPath $VcVars)) { throw "Missing MSVC setup: $VcVars"
 if ($VcVars -match '["&|<>%^!\r\n]' -or $PSScriptRoot -match '["&|<>%^!\r\n]') { throw 'Unsupported command-shell characters in build paths' }
 $buildDir = Join-Path $PSScriptRoot 'build'
 New-Item -ItemType Directory -Path $buildDir -Force | Out-Null
+$previous=Join-Path $buildDir 'AD103M-PROBE.EFI'
+if(Test-Path -LiteralPath $previous) {
+    $archive=Join-Path $buildDir ('archive/'+[DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffffffZ'))
+    [void][IO.Directory]::CreateDirectory($archive)
+    foreach($name in @('AD103M-PROBE.EFI','manifest.json','qualification.json','build_id.h')) {
+        $old=Join-Path $buildDir $name
+        if(Test-Path -LiteralPath $old) {
+            Copy-Item -LiteralPath $old -Destination (Join-Path $archive $name)
+            if((Get-FileHash -LiteralPath $old).Hash -cne (Get-FileHash -LiteralPath (Join-Path $archive $name)).Hash){throw 'Archive verification failed'}
+        }
+    }
+}
+@{tests_passed=$false;firmware_executed=$false;deployed=$false} | ConvertTo-Json | Set-Content (Join-Path $buildDir 'manifest.json')
+@{tests_passed=$false;firmware_executed=$false;deployed=$false} | ConvertTo-Json | Set-Content (Join-Path $buildDir 'qualification.json')
+& $Python (Join-Path $PSScriptRoot 'tools/packet.py') preflight
+if($LASTEXITCODE -ne 0){throw 'Pinned header or input preflight failed'}
 $sourceHashes = [ordered]@{}
 Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'src') -File | Sort-Object Name | ForEach-Object { $sourceHashes[$_.Name] = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
 $identityText = (($sourceHashes.GetEnumerator() | ForEach-Object { $_.Name + '=' + $_.Value }) -join "`n")
@@ -27,6 +43,11 @@ $script = @'
 call "@VCVARS@" >nul
 if not "%errorlevel%"=="0" exit /b 1
 cd /d "@ROOT@"
+if not "%errorlevel%"=="0" exit /b 1
+where cl >build\compiler-path.txt
+if not "%errorlevel%"=="0" exit /b 1
+where link >build\linker-path.txt
+if not "%errorlevel%"=="0" exit /b 1
 cl /nologo /W4 /WX /O2 /Oi /GS- /Gs65536 /Zl /c /TC /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 /Fobuild\core.obj src\core.c
 if not "%errorlevel%"=="0" exit /b 1
 cl /nologo /W4 /WX /O2 /Oi /GS- /Gs65536 /Zl /c /TC /FIbuild_id.h /Ibuild /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 /Fobuild\probe.obj src\probe.c
@@ -37,7 +58,7 @@ cl /nologo /W4 /WX /O2 /Oi /GS- /Gs65536 /Zl /c /TC /I..\..\ad104-msi\vendor\edk
 if not "%errorlevel%"=="0" exit /b 1
 cl /nologo /W4 /WX /Od /Oi- /GS- /Zl /c /TC /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 /Fobuild\runtime.obj src\runtime.c
 if not "%errorlevel%"=="0" exit /b 1
-link /nologo /subsystem:efi_application /entry:UefiMain /machine:x64 /nodefaultlib /incremental:no /fixed:no /dynamicbase:no /nxcompat:no /out:build\AD103M-PROBE.EFI build\core.obj build\probe.obj build\sample.obj build\platform.obj build\runtime.obj
+link /nologo /Brepro /subsystem:efi_application /entry:UefiMain /machine:x64 /nodefaultlib /incremental:no /fixed:no /dynamicbase:no /nxcompat:no /out:build\AD103M-PROBE.EFI build\core.obj build\probe.obj build\sample.obj build\platform.obj build\runtime.obj
 if not "%errorlevel%"=="0" exit /b 1
 cl /nologo /W4 /WX /Od /D_CRT_SECURE_NO_WARNINGS /FIbuild_id.h /Ibuild /I..\..\ad104-msi\vendor\edk2\Include /I..\..\ad104-msi\vendor\edk2\Include\X64 tests\host_tests.c src\core.c src\sample.c src\platform.c /Febuild\host-tests.exe /Fobuild\
 if not "%errorlevel%"=="0" exit /b 1
@@ -59,7 +80,13 @@ if ($LASTEXITCODE -ne 0) { throw 'PE/source verification failure' }
 if ($LASTEXITCODE -ne 0) { throw 'Python verification test failure' }
 & (Join-Path $PSScriptRoot 'tests/test_identity.ps1')
 $binary = Join-Path $buildDir 'AD103M-PROBE.EFI'
-$manifest = [ordered]@{ version='0.4.2'; build_id=$buildId; binary='AD103M-PROBE.EFI'; sha256=(Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant(); source_sha256=$sourceHashes; hardware_tested=$false; gpu_write_capability=$false; mmio_read_capability=$true; validation='MSVC host mocks and PE checks'; utc=[DateTime]::UtcNow.ToString('o') }
+$toolchain=[ordered]@{}
+foreach($name in @('compiler','linker')) {
+    $path=Get-Content (Join-Path $buildDir ($name+'-path.txt')) -First 1
+    $toolchain[$name]=[ordered]@{path=$path;sha256=(Get-FileHash -LiteralPath $path).Hash.ToLowerInvariant();version=(Get-Item -LiteralPath $path).VersionInfo.FileVersion}
+}
+$toolchain['vcvars']=[ordered]@{path=$VcVars;sha256=(Get-FileHash -LiteralPath $VcVars).Hash.ToLowerInvariant()}
+$manifest = [ordered]@{ version='0.4.3'; build_id=$buildId; binary='AD103M-PROBE.EFI'; sha256=(Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant(); source_sha256=$sourceHashes;toolchain=$toolchain; tests_passed=$true;deployed=$false;firmware_executed=$false;hardware_tested=$false; gpu_write_capability=$false; mmio_read_capability=$true; validation='MSVC host mocks and PE checks'; utc=[DateTime]::UtcNow.ToString('o') }
 $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $buildDir 'manifest.json') -Encoding utf8
 $qualification = [ordered]@{
  target='10de:2717/1462:13cd/a1'; expected_chip='0x193000a1'; chip_observed_on_hardware=$false
@@ -69,3 +96,5 @@ $qualification = [ordered]@{
 }
 $qualification | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $buildDir 'qualification.json') -Encoding utf8
 Write-Output $binary
+& $Python (Join-Path $PSScriptRoot 'tools/packet.py') seal
+if($LASTEXITCODE -ne 0){throw 'Packet sealing failed; no launch packet is approved'}

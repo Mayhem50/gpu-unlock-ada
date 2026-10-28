@@ -248,7 +248,7 @@ EFI_STATUS EFIAPI UefiMain(EFI_HANDLE image,EFI_SYSTEM_TABLE *st) {
     BOOLEAN prom_read_allowed=FALSE;
     LOG_SOURCE source={0};
     if(!st||!st->BootServices||!st->RuntimeServices||RelocationAnchor!=Report) return EFI_INVALID_PARAMETER;
-    Message(st,L"MSI GE78HX AD103M diagnostic v0.4.2 - no GPU writes or unlock.\r\n");
+    Message(st,L"MSI GE78HX AD103M diagnostic v0.4.3 - no GPU writes or unlock.\r\n");
     s=OpenLog(image,st,&log,filename,&source);
     if(EFI_ERROR(s)||!log) {Message(st,L"USB path not confirmed, or log unavailable. Returning to firmware.\r\n");return EFI_ERROR(s)?s:EFI_DEVICE_ERROR;}
     TextInit(&t,Report,sizeof(Report));

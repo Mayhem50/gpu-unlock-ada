@@ -3,8 +3,8 @@
 Updated 2026-10-28 after the host DMA/timing work and UEFI feasibility review. This is a gate register,
 not an execution packet. Checked means the stated evidence exists, not that
 the machine is qualified for unlock. Open items block the relevant next stage.
-Current scope: source/CPU validation and host-tested read-only PCI adapter
-foundation. Stage A has an operator-reported successful return to Windows;
+Current scope: source/CPU validation, host-tested read-only PCI adapter
+foundation and a local diagnostic 0.4.3 build/packet. Stage A has an operator-reported successful return to Windows;
 no assistant EFI launch, GPU query/mutation, unlock or boot-protection change.
 Stage A does not detach/reset the GPU. The adapter foundation is not bootable.
 
@@ -55,11 +55,13 @@ It does not admit this MSI's 2717 ID. No external code was integrated.
   without GPU cleanup for console-only errors or unverified automatic rollback.
 - [x] 499 CPU workflow scenarios / 243,622 assertions and 45 isolated DMA ledger
   cases; diagnostic CPU suites
-  (7,925 application / 605 platform), 57 Python tests, identity and PE/source
+  (7,925 application / 605 platform), 62 Python tests, identity and PE/source
   checks recorded passing. Counts include repeated checks, not independent requirements.
 - [x] Negative host/UEFI compilation guards and failed-build manifest invalidation.
-- [x] Diagnostic EFI unchanged, SHA256
+- [x] Previous diagnostic 0.4.2 archived and copy verified, SHA256
   18efed6c4a60ce0ae682fb9c9d165f425c280a2159e32f57124f8cf3c41703f9.
+  The [new diagnostic packet](windows-msi-ge78hx-diagnostic-v043-packet.md)
+  is built/validated locally only. USB Stage A is not changed.
 - [ ] **O1:** complete dependency/toolchain provenance: imported analyzer/comparator
   modules, shared headers, compiler/linker versions and private input manifests.
   Selected-file hashes are not a complete build closure.
@@ -76,7 +78,7 @@ The PE verifier reads the existing diagnostic EFI; it does not execute it.
 Linux test-full and the full AD104 transaction suite were not rerun as part of
 this MSI model validation. Their scenario counts are not MSI coverage.
 
-## 2. Exact profile gate — closed
+## 2. Exact profile — not qualified for a transaction
 
 - [ ] **P1:** validate/pin MSI system firmware, Windows build/driver, framebuffer
   and memory geometry, power state and cold-entry provenance at native admission.
@@ -84,15 +86,15 @@ this MSI model validation. Their scenario counts are not MSI coverage.
 - [ ] **P2:** resolve the three relevant external owners (root bridge, keyboard,
   pointer) and actual console interface/callback/code identities. Do not demand
   resolution of unrelated global edges or use raw handle IDs as identity.
-  Incoming-boundary identity collection is now prepared in diagnostic source
-  and fake-service tests (309 platform checks; 44 Python tests). No new EFI was
-  built/deployed/executed. Existing captures still lack these identities;
+  Incoming-boundary identity collection is prepared and built locally in 0.4.3
+  (605 platform checks; 62 Python tests); no deployment/execution occurred.
+  Existing captures still lack these identities;
   console callback and USB/logging dependencies remain open. See the
   [boundary collection preparation](windows-msi-ge78hx-gop-console-analysis.md#read-only-boundary-collection-preparation--2026-10-28).
   [Passive dependency capture](windows-msi-ge78hx-passive-dependencies.md) now
   prepares 24 console/filesystem/log callback entries, registered-image/code
   provenance and opened USB-log binding. CPU tests refuse missing/ambiguous
-  origins; no new EFI was built or executed. Existing captures still lack the
+  origins; the new EFI is built locally, not executed. Existing captures still lack the
   evidence; storage ownership and notification exclusion remain unproved.
 - [ ] **P3:** bind exclusive PCI I/O interface, protocol IO/MEM/BME attributes,
   logical BAR descriptors and hardware command consistently. Review any status

@@ -3,8 +3,8 @@
 Prepared offline for PCI 10DE:2717 / 1462:13CD / revision A1. This is a
 diagnostic build with no unlock code or NVIDIA firmware linked. The operator
 executed previous versions for captures 3/4. Current source includes a new
-boundary-identity collection extension tested only with host mocks; no EFI
-containing that extension has been built, staged or run. It is not qualified
+boundary identities and passive dependencies. Version 0.4.3 is prepared as a
+local native build and packet, with CPU tests; it is not staged or run. It is not qualified
 for driver release, reset or unlock.
 
 The source also prepares passive console/filesystem/log callback provenance and
@@ -29,6 +29,24 @@ This compiles an x64 EFI and executes only CPU host mocks, PE checks and
 Python/PowerShell tests. MSVC is located through vswhere, or can be specified
 with -VcVars. Python 3 and the Windows x64 MSVC toolchain are required.
 Output: diagnostic/build/AD103M-PROBE.EFI and manifest.json.
+
+Build first archives the previous local image/manifest with verified copies,
+invalidates passing state, verifies pinned headers and snapshots build inputs.
+After compilation/tests it refuses source drift, seals source/generated-input
+and compiler/linker/Python provenance, and records a separate non-execution state.
+This is local provenance, not a hermetic compiler/firmware safety proof.
+
+To recheck or create a new local packet (never USB deployment or execution):
+
+```powershell
+python windows/ad103m-msi-ge78hx/diagnostic/tools/packet.py verify
+python windows/ad103m-msi-ge78hx/diagnostic/tools/packet.py create
+```
+
+The immutable packet under ignored `build/packets/` contains the diagnostic,
+its exact manifest and review instructions. Existing packets are never replaced.
+Stale inputs, altered binary/toolchain, missing provenance or failed tests refuse.
+The previous diagnostic and Stage A remain available; Stage A stays on the USB.
 
 At a future explicitly approved UEFI run, the probe would inventory display
 PCI devices, GOP paths, console variables and the active protocol graph.
