@@ -27,6 +27,8 @@ callback records. Selection is semantic, never snapshot-local image number 320:
    All four protocol statuses and pointers are queried again before the final
    memory map; replacement, removal or appearance makes the result incomplete.
    The JSON retains both sets of statuses/pointers for offline cross-checking.
+   A successful query with a null interface is an explicit refusal, including
+   for optional protocols and for the second query.
 
 Slot meanings remain audit labels for raw bytes, not a certified driver
 structure or a source-patching recipe. Null/zero is retained when read; an
@@ -59,6 +61,10 @@ snapshot, a lock or a proof of future lifetime**.
 The second protocol query precedes the final GetMemoryMap; a callback in that
 service could still change an interface afterward. Re-querying in a loop cannot
 establish continuous exclusion. Event and release qualification remain open.
+Accordingly `interfaces_current_known=false` is explicit and mandatory: saved
+wait tokens describe the earlier observations, not current registrations.
+The regression reproduces an interface replacement inside the last map call
+while the old protocol memory and memory map remain unchanged.
 
 Each collection context is single-use, consumed before service callbacks.
 Recursive/repeated entry latches a violation and cannot produce a complete
@@ -104,7 +110,7 @@ profile, but **was not run** in this preparation.
 
 CPU results:
 
-- **29 collector cases / 101 checks**, including exact profile/path/code rejection,
+- **32 collector cases / 112 checks**, including exact profile/path/code rejection,
   duplicate image, map-buffer/stride/type/cache/read-protection failures,
   descriptor overlap/gap/wrap, reentry/replay, final map/code/state/binding drift,
   missing optional InputEx and opaque tokens deliberately equal to unreadable

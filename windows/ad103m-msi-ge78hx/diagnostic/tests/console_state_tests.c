@@ -13,6 +13,7 @@ static EFI_GUID Loaded=EFI_LOADED_IMAGE_PROTOCOL_GUID,Input=EFI_SIMPLE_TEXT_INPU
 static EFI_GUID Output=EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL_GUID;
 static UINTN Checks,Cases,Mode,Calls,MapCalls;
 static UINTN ExCalls;
+static BOOLEAN LateRegistryChanged;
 static UINTN OtherCalls[4];
 static EFI_GUID Pointer={0x31878c87,0x0b75,0x11d5,{0x9a,0x4f,0,0x90,0x27,0x3f,0xc1,0x4d}};
 static EFI_GUID Absolute={0x8d59d32b,0xc655,0x4ae9,{0x9b,0x15,0xf2,0x59,4,0x99,0x2a,0x43}};
@@ -30,6 +31,8 @@ static EFI_STATUS EFIAPI Handle(EFI_HANDLE h,EFI_GUID *g,VOID **out) {
  if(BytesEqual(g,&Input,16)){OtherCalls[0]++;*out=Mode==26&&OtherCalls[0]==2?A.interfaces[2]:A.interfaces[0];return Mode==13?EFI_DEVICE_ERROR:EFI_SUCCESS;}
  if(BytesEqual(g,&Ex,16)){
   ExCalls++;*out=A.interfaces[1];
+  if(Mode==29||(Mode==30&&ExCalls==2))*out=NULL;
+  if(LateRegistryChanged)*out=A.interfaces[2];
   if(Mode==24&&ExCalls==2)*out=A.interfaces[2];
   if(Mode==25&&ExCalls==2)return EFI_UNSUPPORTED;
   return Mode==17?EFI_UNSUPPORTED:EFI_SUCCESS;
@@ -58,11 +61,12 @@ static EFI_STATUS EFIAPI MemoryMap(UINTN *bytes,EFI_MEMORY_DESCRIPTOR *map,UINTN
   if(Mode==21)A.outputs[0][1]^=1;
   if(Mode==22)St.ConOut=NULL;
   if(Mode==23)St.ConsoleInHandle=(EFI_HANDLE)(UINTN)5;
+  if(Mode==31)LateRegistryChanged=TRUE;
  }
  return EFI_SUCCESS;
 }
 static void Setup(UINTN mode) {
- Mode=mode;Calls=MapCalls=ExCalls=0;memset(OtherCalls,0,sizeof(OtherCalls));Cases++;memset(&C,0,sizeof(C));memset(&A,0,sizeof(A));memset(&Image,0,sizeof(Image));
+ Mode=mode;Calls=MapCalls=ExCalls=0;LateRegistryChanged=FALSE;memset(OtherCalls,0,sizeof(OtherCalls));Cases++;memset(&C,0,sizeof(C));memset(&A,0,sizeof(A));memset(&Image,0,sizeof(Image));
  memset(&St,0,sizeof(St));memset(&Bs,0,sizeof(Bs));Bs.HandleProtocol=Handle;Bs.GetMemoryMap=MemoryMap;St.BootServices=&Bs;
  St.ConsoleInHandle=Handles[1];St.ConIn=(EFI_SIMPLE_TEXT_INPUT_PROTOCOL *)A.interfaces[0];
  St.ConsoleOutHandle=(EFI_HANDLE)(UINTN)3;St.StandardErrorHandle=(EFI_HANDLE)(UINTN)4;
@@ -83,9 +87,9 @@ static void Setup(UINTN mode) {
 }
 static void CaptureTests(void) {
  static CHAR8 json[16384];TEXT t;
- for(UINTN mode=0;mode<29;mode++) {
+ for(UINTN mode=0;mode<32;mode++) {
   Setup(mode);CsCapture(&C,&St,Handles,mode==14?2:1);
-  if(mode==0||mode==17||mode==19)CHECK(C.slots_complete);else CHECK(!C.slots_complete);
+  if(mode==0||mode==17||mode==19||mode==31)CHECK(C.slots_complete);else CHECK(!C.slots_complete);
   if(mode==0) {
    CHECK(C.pinned&&C.map_equal&&C.slots_equal&&C.final_equal);CHECK(C.words[0][0][2]==1);
    CHECK(C.slot_masks[0]==((1u<<CS_SLOT_COUNT)-1));
@@ -101,7 +105,14 @@ static void CaptureTests(void) {
   if(mode==20)CHECK(!C.binding_verified&&C.slot_masks[0]==0);
   if(mode==21||mode==22)CHECK(!C.binding_verified);
   if(mode==23)CHECK(!C.binding_verified);
-  if(mode>=24)CHECK(!C.interfaces_revalidated&&!strcmp(C.reason,"input_protocol_changed"));
+  if(mode>=24&&mode<=28)CHECK(!C.interfaces_revalidated&&!strcmp(C.reason,"input_protocol_changed"));
+  if(mode==29||mode==30)CHECK(!strcmp(C.reason,"null_success_interface"));
+  if(mode==31) {
+   VOID *now=NULL;CHECK(Handle(St.ConsoleInHandle,&Ex,&now)==EFI_SUCCESS);
+   CHECK((UINTN)now!=C.revalidated_interfaces[1]);
+   TextInit(&t,json,sizeof(json));CsJson(&t,&C);
+   CHECK(strstr(json,"\"interfaces_current_known\":false"));
+  }
   if(mode==17)CHECK(!C.interface_read[1]);
  }
 }

@@ -81,8 +81,8 @@ It does not admit this MSI's 2717 ID. No external code was integrated.
   without GPU cleanup for console-only errors or unverified automatic rollback.
 - [x] 500 CPU workflow scenarios / 243,628 assertions and 45 isolated DMA ledger
   cases; diagnostic CPU suites
-  (7,925 application / 722 platform), 75 Python tests and 29 targeted-console
-  cases / 101 checks, identity and PE/source
+  (7,925 application / 722 platform), 75 Python tests and 32 targeted-console
+  cases / 112 checks, identity and PE/source
   checks recorded passing. Counts include repeated checks, not independent requirements.
 - [x] Negative host/UEFI compilation guards and failed-build manifest invalidation.
 - [x] Previous diagnostic 0.4.2 archived and copy verified, SHA256

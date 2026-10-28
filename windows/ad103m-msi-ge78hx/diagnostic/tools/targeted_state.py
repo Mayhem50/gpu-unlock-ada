@@ -12,7 +12,7 @@ PIN='c14e5170fda8bd2529028c8248d7e6cf9518cbac498af7f69fd6cdc8e9929766'
 def assess(data):
     result=dict(console_fields_observed=False,reason='not_captured',public_wait_tokens={},
                 pointer_protocols_raw=[],event_contexts_known=False,pending_events_known=False,
-                release_authorized=False,quiescence_proved=False)
+                interfaces_current_known=False,release_authorized=False,quiescence_proved=False)
     state=data.get('platform',{}).get('console_state')
     if state is None:return result
     try:
@@ -20,7 +20,7 @@ def assess(data):
             raise ValueError('console profile not verified')
         for name in ('image_pinned','active_console_binding_verified','input_interfaces_revalidated','slots_complete','memory_maps_equal','post_service_state_equal'):
             if state.get(name) is not True:raise ValueError('incomplete '+name)
-        for name in ('single_use_violation','heap_lists_followed','event_objects_dereferenced','event_contexts_known',
+        for name in ('single_use_violation','interfaces_current_known','heap_lists_followed','event_objects_dereferenced','event_contexts_known',
                      'pending_events_known','callbacks_invoked','atomic_snapshot','release_authorized'):
             if state.get(name) is not False:raise ValueError('incompatible '+name)
         maps=state['memory_maps']
@@ -65,9 +65,15 @@ def assess(data):
             basic.get('raw_words',[])[:2]!=[f"0x{base+0x3230:016x}",f"0x{base+0x32d4:016x}"]):
             raise ValueError('input interface differs from callback evidence')
         for index,interface in enumerate(interfaces):
-            if (interface.get('status') is None or interface.get('revalidated_status')!=interface.get('status') or
+            if (not isinstance(interface.get('status'),str) or not re.fullmatch(r'0x[0-9a-f]{16}',interface['status']) or
+                not isinstance(interface.get('interface'),str) or not re.fullmatch(r'0x[0-9a-f]{16}',interface['interface']) or
+                interface.get('revalidated_status')!=interface.get('status') or
                 interface.get('revalidated_interface')!=interface.get('interface')):
                 raise ValueError('input interface revalidation differs')
+            if interface['status']=='0x0000000000000000' and interface.get('interface')=='0x0000000000000000':
+                raise ValueError('success with null input interface')
+            if interface['status']!='0x0000000000000000' and interface['interface']!='0x0000000000000000':
+                raise ValueError('failed query has non-null interface')
             if interface.get('ram_read') is not True or interface.get('two_reads_equal') is not True:continue
             words=interface['raw_words'];count=3 if index==0 else 6 if index==1 else 4
             if (interface.get('status')!='0x0000000000000000' or len(words)!=count or words!=interface.get('second_raw_words') or

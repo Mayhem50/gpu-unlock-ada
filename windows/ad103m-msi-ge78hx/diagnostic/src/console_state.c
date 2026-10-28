@@ -110,6 +110,7 @@ void CsCapture(CS_CAPTURE *c,EFI_SYSTEM_TABLE *st,EFI_HANDLE *handles,UINTN coun
         VOID *p=NULL;c->interface_status[i]=bs->HandleProtocol(c->roots[0],&ids[i],&p);
         c->queried_mask|=(UINTN)1<<i;
         if(c->violation)return;
+        if(c->interface_status[i]==EFI_SUCCESS&&!p){c->reason="null_success_interface";return;}
         c->interfaces[i]=c->interface_status[i]==EFI_SUCCESS?(UINTN)p:0;
         c->word_count[i]=i==0?3:i==1?6:4;
     }
@@ -159,6 +160,7 @@ void CsCapture(CS_CAPTURE *c,EFI_SYSTEM_TABLE *st,EFI_HANDLE *handles,UINTN coun
         c->revalidated_mask|=(UINTN)1<<i;c->revalidated_status[i]=s;
         c->revalidated_interfaces[i]=s==EFI_SUCCESS?(UINTN)p:0;
         if(c->violation){c->reason="reentry_refused";return;}
+        if(s==EFI_SUCCESS&&!p){c->reason="null_success_interface";return;}
         if(s!=c->interface_status[i] || (s==EFI_SUCCESS&&(UINTN)p!=c->interfaces[i])) {
             c->reason="input_protocol_changed";return;
         }
@@ -231,5 +233,5 @@ void CsJson(TEXT *t,const CS_CAPTURE *c) {
         TextPut(t,",\"public_wait_token\":");if(i<2&&c->interface_read[i])TextHex(t,c->words[0][i][2],16);else TextPut(t,"null");
         TextPut(t,",\"pointer_layout_decoded\":false}");
     }
-    TextPut(t,"],\"heap_lists_followed\":false,\"event_objects_dereferenced\":false,\"event_contexts_known\":false,\"pending_events_known\":false,\"callbacks_invoked\":false,\"atomic_snapshot\":false,\"release_authorized\":false}");
+    TextPut(t,"],\"interfaces_current_known\":false,\"heap_lists_followed\":false,\"event_objects_dereferenced\":false,\"event_contexts_known\":false,\"pending_events_known\":false,\"callbacks_invoked\":false,\"atomic_snapshot\":false,\"release_authorized\":false}");
 }
