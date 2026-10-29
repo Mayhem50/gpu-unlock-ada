@@ -13,9 +13,9 @@ def assess(data):
     result=dict(console_fields_observed=False,reason='not_captured',public_wait_tokens={},
                 pointer_protocols_raw=[],event_contexts_known=False,pending_events_known=False,
                 interfaces_current_known=False,release_authorized=False,quiescence_proved=False)
-    state=data.get('platform',{}).get('console_state')
-    if state is None:return result
     try:
+        state=data.get('platform',{}).get('console_state')
+        if state is None:return result
         if state.get('profile')!='msi-capture6-console-v1' or state.get('profile_code_sha256')!=PIN or state.get('image_bytes')!=24256:
             raise ValueError('console profile not verified')
         for name in ('image_pinned','active_console_binding_verified','input_interfaces_revalidated','slots_complete','memory_maps_equal','post_service_state_equal'):
@@ -87,6 +87,6 @@ def assess(data):
                     raise ValueError('opaque pointer interface was interpreted')
                 result['pointer_protocols_raw'].append(kinds[index])
         result.update(console_fields_observed=True,reason='raw_observation_only')
-    except (KeyError,TypeError,ValueError) as error:
+    except (KeyError,TypeError,ValueError,AttributeError) as error:
         result.update(console_fields_observed=False,reason=str(error),public_wait_tokens={},pointer_protocols_raw=[])
     return result

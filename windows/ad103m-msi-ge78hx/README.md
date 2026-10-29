@@ -1,53 +1,28 @@
-# MSI Raider GE78HX 13VI / AD103M Windows port workspace
+# MSI Raider GE78HX 13VI — Windows Hybrid unlock
 
-This directory is intentionally a **non-transactional** workspace for the
-exact laptop profile:
+Machine-specific reference for RTX 4090 Laptop `10de:2717`, subsystem
+`1462:13cd`, revision A1, VBIOS `95.03.2A.00.2A`, BIOS `E17S1IMS.114`.
 
-```text
-PCI:       10de:2717
-Subsystem: 1462:13cd
-Revision:  a1
-VBIOS:     95.03.2A.00.2A
-System BIOS: E17S1IMS.114
-```
+The validated path is [native Hybrid U6](native/README.md) plus the
+NVIDIA-only Windows runtime-power workaround. On 2026-10-29, RUN0008 retained
+the full unlock through Windows driver initialization, preserved the Intel
+A788 internal display route and physical brightness, and passed three matched
+CUDA GEMM runs: FP16 +84.65%, BF16 +83.27%, FP32 approximately unchanged.
 
-The read-only EFI diagnostic is implemented and compiled under diagnostic/.
-There is no unlock payload, VBIOS image or boot registration command.
-The probe writes logs only to its own USB source. Captures 3/4 were executed
-manually by the user; no new probe deployment or launch is part of current work.
-The [offline port prototype](port/README.md) models MSI release, reset and
-Windows handoff against CPU mocks derived from captures 3 and 4. It is not
-bootable and does not contain an executable unlock backend.
-The separate [Stage A stock handoff](stock-handoff/README.md) is now built for
-a first normal Windows boot test: it has no GPU protocols, DMA, release/reset
-or unlock. Its USB staging helper is gated on the actual ESP fingerprint and
-verified removable-media identity. On 2026-10-28 the operator reported a
-successful manual Stage A test; there is no captured execution/driver trace.
-the current profile is tied to the operator-reported ESP fingerprint and an
-identical authenticated component-store image. Current security/recovery checks
-and future physical trials are separate from this source/build evidence.
-The [adapter foundation](adapter/README.md) now host-tests read-only PCI
-admission using actual UEFI protocol types. It has no EFI entry point, native
-execution or write/reset/unlock path, and is not connected to the USB build.
-`build/`, `local/`, and `captures/` are
-ignored because captures can include proprietary firmware and machine-specific
-data.
+See the [results and limits](../../docs/windows-msi-ge78hx-hybrid-runtime-power-validation.md)
+and [public report #117](https://github.com/JustAResearcher/gpu-unlock-ada/issues/117).
+Sleep/resume, hibernation and long-term stability remain unqualified. A new
+boot without U is not expected to retain the transaction's volatile state.
 
-GPU-port validation remains CPU-only; Stage A has its own host/PE checks.
-Use each component's README for its build/test command.
-The host baseline collector below is a reference for a later authorized idle
-GPU session, and is not run as part of an offline review:
+- `native/`: Hybrid U6 build, exact admission, Intel-preserving handoff,
+  D/T data collection, packaging and verified USB staging.
+- `diagnostic/`: capture inventory, host tests and shared source used by the
+  native generator. Host checks do not establish hardware unlock success.
+- [Windows tools](../../tools/README-msi-hybrid.md): build the readers, inspect,
+  apply or restore the targeted policy, read registers and benchmark.
 
-```powershell
-pwsh -NoProfile -File .\tools\windows-msi-ge78hx-readonly.ps1 -IncludeGpu -ConfirmGpuIdle
-```
-
-Run it only once the active GPU workload is finished. It prints data only; it
-does not write a file, call EFI code, alter BCD/ESP/BootOrder, modify Secure
-Boot, install a driver, flash a VBIOS, or perform GPU MMIO writes.
-
-See [the design](../../docs/windows-msi-ge78hx-ad103m-port-plan.md),
-[the launch checklist](../../docs/windows-msi-ge78hx-launch-checklist.md) and
-[the diagnostic build instructions](diagnostic/README.md).
-The [method alignment review](../../docs/windows-msi-ge78hx-method-alignment.md)
-maps the prototype to repository requirements and records open native gates.
+Firmware assets, physical PROM/captures, ESP observations, generated sources,
+binaries, private backups and ETLs remain ignored. No build or test command
+automatically boots the EFI, resets a GPU, changes the MUX or modifies the ESP.
+The offline adapter/port prototypes and provisional stock-handoff route
+are superseded by the native path and have been removed from the source tree.

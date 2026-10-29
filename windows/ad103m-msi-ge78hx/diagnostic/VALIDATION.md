@@ -1,5 +1,8 @@
 # Offline validation — 2026-10-27
 
+Historical diagnostic-only evidence. This is not the current native unlock
+status; see [the Hybrid Windows validation](../../../docs/windows-msi-ge78hx-hybrid-runtime-power-validation.md).
+
 Built using VS 2022 Community x64 MSVC, discovered by vswhere, and Python 3.13.
 Only build tools, CPU test programs and static analysis were executed.
 No PnP/CIM/NVML/CUDA collector, firmware program or GPU benchmark was run.

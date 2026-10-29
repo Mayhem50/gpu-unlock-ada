@@ -1,0 +1,38 @@
+MSI GE78HX 2717 - HYBRID U6 - essai d'unlock
+
+U6 conserve le decodage memoire NVIDIA actif apres un unlock reussi,
+avec bus mastering desactive et toutes les allocations DMA liberees.
+L'affichage Intel reste preserve et l'acces exclusif NVIDIA est ferme.
+Le retour arriere AVANT lancement du firmware restaure toujours le decodage
+d'origine desactive. Le controle de derive SS0 complet reste en place,
+sans liste historique des valeurs initiales.
+
+1. Conserver Hybrid/MSHybrid, chargeur branche et Kingston connectee.
+   Le chemin Windows valide utilise EnableRuntimePowerManagement=0 uniquement
+   pour le NVIDIA 2717. Appliquer/inspecter avec Set-MsiHybridRuntimePower.ps1
+   avant le redemarrage, en conservant sa sauvegarde pour le retour arriere.
+2. Enregistrer le travail puis Redemarrer -> F11 -> UEFI Kingston.
+3. Verifier le titre MSI 2717 HYBRID U6, puis appuyer UNE FOIS sur U.
+4. Attendre Windows sans intervenir. L'affichage Intel reste attache mais
+   peut paraitre fige pendant la transaction du NVIDIA.
+5. Verifier la luminosite reelle, conserver la cle branchee et archiver le
+   nouveau journal. Lire les registres Windows avec Read-MsiSelectors.ps1,
+   puis mesurer avec Run-MsiMatchedBenchmark.py (voir le guide des outils).
+6. Pas de veille, hibernation, changement de mode GPU ou nouveau redemarrage
+   avant la mesure de performance.
+
+U lance FWSEC/payload/selecteurs et un FLR du NVIDIA si les controles passent.
+Le GOP Intel n'est ni detache ni reconnecte. Apres succes, NVIDIA reste avec
+commande PCI=2 (memoire active, bus mastering coupe) et attribut MEMORY actif.
+Les autres valeurs PCI sont controlees; l'acces exclusif est ferme avant Windows.
+RUN0008 U6 avec le reglage Windows NVIDIA a conserve FEAT/SS0/SS1/readout
+ouverts sous Windows 595.79 : FP16 +84,65%, BF16 +83,27%, affichage Intel et
+luminosite preserves. Un seul demarrage valide; veille/reprise non validees.
+U6 seul sans ce reglage avait perdu l'unlock pendant le demarrage Windows.
+D reste un controle hybride sans ecriture, sans activation decode ni payload.
+S/Echap ou 30 secondes sans choix : Windows normal sans transaction GPU.
+T n'est pas disponible. Journal : MSI2717-HYBRID-U/RUNxxxx.TXT.
+
+En cas de STOP ou si Windows ne revient pas apres quatre minutes : eteindre
+completement, puis demarrer Windows Boot Manager normalement au boot suivant.
+Conserver la cle et les journaux. Ne pas relancer U automatiquement.

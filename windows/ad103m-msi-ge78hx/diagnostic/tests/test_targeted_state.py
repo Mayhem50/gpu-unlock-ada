@@ -34,6 +34,20 @@ def fixture():
 class TargetedTests(unittest.TestCase):
     def test_empty_old_capture_is_unknown(self):self.assertFalse(assess({})['console_fields_observed'])
 
+    def test_malformed_containers_fail_closed(self):
+        for data in (None, [], {'platform': []}, {'platform': {'console_state': []}},
+                     {'platform': {'console_state': 'invalid'}}):
+            with self.subTest(data=data):
+                result=assess(data)
+                self.assertFalse(result['console_fields_observed'])
+                self.assertFalse(result['release_authorized'])
+                self.assertEqual(result['public_wait_tokens'], {})
+
+    def test_malformed_nested_containers_fail_closed(self):
+        for key in ('memory_maps','candidate_diagnostics','slots','input_interfaces'):
+            d=fixture();d['platform']['console_state'][key]=[None] if key!='candidate_diagnostics' else []
+            with self.subTest(key=key):self.assertFalse(assess(d)['console_fields_observed'])
+
     def test_raw_zero_slots_and_opaque_tokens_are_observations_only(self):
         r=assess(fixture());self.assertTrue(r['console_fields_observed'])
         self.assertEqual(len(r['public_wait_tokens']),2)
@@ -64,7 +78,7 @@ class TargetedTests(unittest.TestCase):
     def test_actual_c_synthetic_capture_has_no_production_qualification(self):
         file=ROOT/'build/console-state-host.json'
         if not file.exists():self.skipTest('Run CPU console tests first')
-        s=json.loads(file.read_text());self.assertEqual(len(s['slots']),len(SLOTS))
+        s=json.loads(file.read_text());self.assertEqual(s['slots'],[]);self.assertEqual(s['reason'],'interface_lifetime_unproven')
         self.assertFalse(assess(dict(platform=dict(console_state=s)))['console_fields_observed'])
 
     def test_inconsistent_evidence_refuses_even_with_success_flags(self):

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<WindowsPerformanceRecorder Version="1.0" Author="MSI2717 diagnostics">
+  <Profiles>
+    <EventCollector Id="MsiHybridCollector" Name="MSI2717 Hybrid Power">
+      <BufferSize Value="128"/>
+      <Buffers Value="256"/>
+    </EventCollector>
+    <EventProvider Id="Dxg" Name="Microsoft-Windows-DxgKrnl" Level="5" NonPagedMemory="true" Strict="true">
+      <Keywords><Keyword Value="0x741"/></Keywords>
+      <CaptureStateOnStart><Keyword Value="0xffff"/></CaptureStateOnStart>
+      <CaptureStateOnSave><Keyword Value="0xffff"/></CaptureStateOnSave>
+    </EventProvider>
+    <EventProvider Id="Power" Name="Microsoft-Windows-Kernel-Power" Level="5" NonPagedMemory="true" Strict="true">
+      <Keywords><Keyword Value="0x10f"/></Keywords>
+    </EventProvider>
+    <EventProvider Id="Pnp" Name="Microsoft-Windows-Kernel-PnP" Level="5" NonPagedMemory="true" Strict="true">
+      <Keywords><Keyword Value="0xffffffffffffffff"/></Keywords>
+    </EventProvider>
+    <EventProvider Id="Acpi" Name="Microsoft-Windows-Kernel-Acpi" Level="5" NonPagedMemory="true" Strict="true">
+      <Keywords><Keyword Value="0xffffffffffffffff"/></Keywords>
+    </EventProvider>
+    <EventProvider Id="Registry" Name="Microsoft-Windows-Kernel-Registry" Level="4" NonPagedMemory="true" Strict="true">
+      <Keywords><Keyword Value="0x2401"/></Keywords>
+    </EventProvider>
+    <Profile Id="MsiHybridPower.Verbose.File" Name="MsiHybridPower" Description="MSI2717 adapter initialization and runtime power; no scheduler sampling" LoggingMode="File" DetailLevel="Verbose">
+      <Collectors><EventCollectorId Value="MsiHybridCollector"><EventProviders>
+        <EventProviderId Value="Dxg"/><EventProviderId Value="Power"/>
+        <EventProviderId Value="Pnp"/><EventProviderId Value="Acpi"/>
+        <EventProviderId Value="Registry"/>
+      </EventProviders></EventCollectorId></Collectors>
+    </Profile>
+  </Profiles>
+</WindowsPerformanceRecorder>

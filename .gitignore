@@ -40,6 +40,7 @@ Module.symvers
 /windows/ad103m-msi-ge78hx/port/build/
 /windows/ad103m-msi-ge78hx/stock-handoff/build/
 /windows/ad103m-msi-ge78hx/adapter/build/
+/windows/ad103m-msi-ge78hx/native/build/
 *.EFI
 *.efi
 *.exe

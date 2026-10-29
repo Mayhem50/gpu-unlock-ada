@@ -1,0 +1,173 @@
+{
+  "date": "2026-10-29",
+  "report": "https://github.com/JustAResearcher/gpu-unlock-ada/issues/117",
+  "target": {
+    "model": "MSI Raider GE78HX 13VI",
+    "nvidia": "10de:2717",
+    "subsystem": "1462:13cd",
+    "revision": "a1",
+    "intel": "8086:a788",
+    "panel": "AUO84A6",
+    "vbios": "95.03.2A.00.2A",
+    "nvidia_driver": "595.79",
+    "windows_build": "26300"
+  },
+  "policy": {
+    "name": "EnableRuntimePowerManagement",
+    "value": 0,
+    "scope": "NVIDIA display-class adapter key only",
+    "original_value_existed": false,
+    "intel_unchanged": true
+  },
+  "hardware_run": "RUN0008",
+  "efi_sha256": "83f8c6656c87c2575f23f46a0d67641d19f9cea909aed35fa7bbf58d3b8d6dd7",
+  "uefi_log_sha256": "c3e06add27cdc22aadc8165471e2cce36aa176408e373187a38f0414076e45c7",
+  "windows_registers": {
+    "bar0": "0x5e000000",
+    "chip": "193000a1",
+    "FEAT_PLM": "ffffffff",
+    "SS0": "88888888",
+    "SS1": "00000008",
+    "READOUT_1": "00000000",
+    "chip_after": "193000a1",
+    "register_writes": 0,
+    "unmapped": true
+  },
+  "intel_panel_route_verified": true,
+  "physical_brightness_operator_confirmed": true,
+  "reader_service_removed": true,
+  "reader_cleanup_errors": [],
+  "benchmark": {
+    "repetitions": 3,
+    "size": 4096,
+    "samples": 15,
+    "batch": 5,
+    "warmup_seconds": 3,
+    "matching_runtime_fields": {
+      "python": true,
+      "torch": true,
+      "torch_cuda": true,
+      "gpu": true,
+      "capability": true,
+      "cublas_version": true,
+      "cublas_sha256": true,
+      "cublasLt_sha256": true,
+      "benchmark_sha256": true,
+      "math_mode": true,
+      "seed": true,
+      "warmup_seconds": true
+    },
+    "modes": [
+      {
+        "mode": "fp32_pedantic",
+        "median_tflops": {
+          "stock": 27.58389828923894,
+          "after_u": 26.965734873715217,
+          "hybrid_u5": 27.25122407234316,
+          "hybrid_runtime_off": 27.37946517065581
+        },
+        "run_medians_tflops": {
+          "stock": [
+            27.588433160492603,
+            27.58389828923894,
+            27.359023440065158
+          ],
+          "after_u": [
+            27.486735867423885,
+            26.965734873715217,
+            26.883332082738338
+          ],
+          "hybrid_u5": [
+            27.385714805056658,
+            27.25122407234316,
+            27.175905955224987
+          ],
+          "hybrid_runtime_off": [
+            27.59070221176687,
+            27.198485152297327,
+            27.37946517065581
+          ]
+        },
+        "hybrid_runtime_off_vs_stock_percent": -0.7411320779952435,
+        "numerical_checks_passed": true,
+        "all_output_hashes_match": true
+      },
+      {
+        "mode": "fp16_fp32",
+        "median_tflops": {
+          "stock": 85.239256978831,
+          "after_u": 134.8379841851581,
+          "hybrid_u5": 85.2500776550831,
+          "hybrid_runtime_off": 157.39630394212256
+        },
+        "run_medians_tflops": {
+          "stock": [
+            85.26091116728988,
+            85.1881958721571,
+            85.239256978831
+          ],
+          "after_u": [
+            134.8379841851581,
+            149.5295483509603,
+            131.74988195490724
+          ],
+          "hybrid_u5": [
+            85.4702831845397,
+            85.2500776550831,
+            85.1871786981058
+          ],
+          "hybrid_runtime_off": [
+            157.39630394212256,
+            162.65857463560687,
+            155.21098885243302
+          ]
+        },
+        "hybrid_runtime_off_vs_stock_percent": 84.65236502614239,
+        "numerical_checks_passed": true,
+        "all_output_hashes_match": true
+      },
+      {
+        "mode": "bf16_fp32",
+        "median_tflops": {
+          "stock": 85.17907238704878,
+          "after_u": 135.7697475418523,
+          "hybrid_u5": 84.49902814421453,
+          "hybrid_runtime_off": 156.10343213266145
+        },
+        "run_medians_tflops": {
+          "stock": [
+            85.239256978831,
+            85.17907238704878,
+            85.00172467242447
+          ],
+          "after_u": [
+            135.7697475418523,
+            129.9143188405543,
+            156.17608962615196
+          ],
+          "hybrid_u5": [
+            85.2500776550831,
+            84.49902814421453,
+            83.74345758591363
+          ],
+          "hybrid_runtime_off": [
+            156.10343213266145,
+            159.8674560866817,
+            149.9702204432468
+          ]
+        },
+        "hybrid_runtime_off_vs_stock_percent": 83.26500601384397,
+        "numerical_checks_passed": true,
+        "all_output_hashes_match": true
+      }
+    ]
+  },
+  "limits": [
+    "Single successful boot with override; repeated boots, sleep/resume and hibernation untested",
+    "No persistence across another boot without U demonstrated",
+    "Historical stock MUX/MSI power profile not independently recorded",
+    "Synthetic GEMM only; no long-term stability or application benchmark",
+    "Prior D3 event does not establish D3cold or exact relock instruction; no successful-run boot ETL",
+    "NVIDIA runtime power saving disabled; battery impact unmeasured"
+  ]
+}
